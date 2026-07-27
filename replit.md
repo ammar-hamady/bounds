@@ -30,12 +30,22 @@ app/src/main/java/com/example/bounds/
 │   └── theme/                   # Color, Type, Theme
 ```
 
+## Features
+
+- **Zones tab** — create, edit, enable/disable, and delete geo-fenced blocking zones
+- **Current tab** — manually lock Instagram for a chosen duration; each lock records an analytics event
+- **Analytics tab** — session count, total time blocked, top blocked app, 7-day bar chart, and recent sessions list
+- **Settings** — accessible via the ⚙️ cog in the top-right of every main screen:
+  - Theme picker: System / Light / Dark
+  - Grace timer slider (0–60 s delay before blocking activates)
+  - Delete analytics data (with confirmation dialog)
+
 ## Important notes
 
 - **Google Maps API key** is required for the map UI. Add it to `app/src/main/res/values/secrets.xml` or `local.properties` (see [Maps SDK setup](https://developers.google.com/maps/documentation/android-sdk/get-api-key)).
-- **App state is in-memory only** — zones are lost when the app is killed. Persistence (Room/DataStore) has not been implemented yet.
+- **App state is in-memory only** — zones and analytics events are lost when the app is killed. Persistence (Room/DataStore) has not been implemented yet.
 - The `AppBlockingService` currently hardcodes "Instagram" in notification text — this needs to be wired up to the actual blocked app list.
-- The "Reclaimed Time" stat on the home screen is hardcoded to "12h".
+- The "Reclaimed Time" stat on the Zones home screen is hardcoded to "12h".
 
 ## Building
 

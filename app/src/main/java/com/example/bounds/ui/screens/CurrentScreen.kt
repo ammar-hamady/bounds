@@ -29,7 +29,10 @@ import com.example.bounds.util.AppBlockingManager
 import kotlin.math.roundToInt
 
 @Composable
-fun CurrentScreen(modifier: Modifier = Modifier) {
+fun CurrentScreen(
+    onBlockingStarted: (appName: String, durationMinutes: Int) -> Unit = { _, _ -> },
+    modifier: Modifier = Modifier
+) {
     var latitude by remember { mutableStateOf(40.7128) }
     var longitude by remember { mutableStateOf(-74.0060) }
     var sliderValue by remember { mutableStateOf(30f) }
@@ -60,9 +63,7 @@ fun CurrentScreen(modifier: Modifier = Modifier) {
         Spacer(modifier = Modifier.height(16.dp))
 
         // Time Slider
-        Column(
-            modifier = Modifier.fillMaxWidth()
-        ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
             Text(
                 text = "Block Time",
                 fontSize = 18.sp,
@@ -70,20 +71,16 @@ fun CurrentScreen(modifier: Modifier = Modifier) {
                 color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.padding(bottom = 12.dp)
             )
-
             Text(
                 text = "${sliderValue.roundToInt()} minutes",
                 fontSize = 14.sp,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(bottom = 12.dp)
             )
-
             Slider(
                 value = sliderValue,
                 onValueChange = { newValue ->
-                    if (!isLocked) {
-                        sliderValue = newValue
-                    }
+                    if (!isLocked) sliderValue = newValue
                 },
                 valueRange = 5f..480f,
                 modifier = Modifier
@@ -91,7 +88,6 @@ fun CurrentScreen(modifier: Modifier = Modifier) {
                     .padding(horizontal = 8.dp),
                 enabled = !isLocked
             )
-
             Text(
                 text = "5 min - 8 hours",
                 fontSize = 12.sp,
@@ -107,7 +103,10 @@ fun CurrentScreen(modifier: Modifier = Modifier) {
             Text(
                 text = statusMessage,
                 fontSize = 12.sp,
-                color = if (statusMessage.contains("not installed")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                color = if (statusMessage.contains("not installed"))
+                    MaterialTheme.colorScheme.error
+                else
+                    MaterialTheme.colorScheme.primary,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 12.dp)
@@ -131,6 +130,7 @@ fun CurrentScreen(modifier: Modifier = Modifier) {
                     if (success) {
                         statusMessage = "✅ Instagram locked for $durationMinutes minutes"
                         isLocked = true
+                        onBlockingStarted("Instagram", durationMinutes)
                     } else {
                         statusMessage = "❌ Instagram not installed"
                     }
@@ -140,7 +140,8 @@ fun CurrentScreen(modifier: Modifier = Modifier) {
                 .fillMaxWidth()
                 .height(56.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = if (isLocked) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                containerColor = if (isLocked) MaterialTheme.colorScheme.error
+                else MaterialTheme.colorScheme.primary
             )
         ) {
             Text(
