@@ -17,16 +17,19 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewScreenSizes
+import com.example.bounds.model.Zone
+import com.example.bounds.ui.screens.AddZoneScreen
+import com.example.bounds.ui.screens.CurrentScreen
+import com.example.bounds.ui.screens.HomeScreen
 import com.example.bounds.ui.theme.BoundsTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setConteMy Applicationnt {
+        setContent {
             BoundsTheme {
                 BoundsApp()
             }
@@ -37,30 +40,77 @@ class MainActivity : ComponentActivity() {
 @PreviewScreenSizes
 @Composable
 fun BoundsApp() {
-    var currentDestination by rememberSaveable { mutableStateOf(AppDestinations.HOME) }
+    var currentDestination by rememberSaveable { mutableStateOf(AppDestinations.ZONES) }
+    var showAddZoneScreen by rememberSaveable { mutableStateOf(false) }
+    var editingZone by rememberSaveable { mutableStateOf<Zone?>(null) }
+    var zones by rememberSaveable { mutableStateOf<List<Zone>>(emptyList()) }
 
-    NavigationSuiteScaffold(
-        navigationSuiteItems = {
-            AppDestinations.entries.forEach {
-                item(
-                    icon = {
-                        Icon(
-                            painterResource(it.icon),
-                            contentDescription = it.label
-                        )
-                    },
-                    label = { Text(it.label) },
-                    selected = it == currentDestination,
-                    onClick = { currentDestination = it }
-                )
+    if (showAddZoneScreen) {
+        AddZoneScreen(
+            onSave = { newZone ->
+                if (editingZone != null) {
+                    zones = zones.map { if (it.id == editingZone!!.id) newZone else it }
+                } else {
+                    zones = zones + newZone
+                }
+                showAddZoneScreen = false
+                editingZone = null
+            },
+            onCancel = {
+                showAddZoneScreen = false
+                editingZone = null
+            },
+            initialZone = editingZone
+        )
+    } else {
+        NavigationSuiteScaffold(
+            navigationSuiteItems = {
+                AppDestinations.entries.forEach {
+                    item(
+                        icon = {
+                            Icon(
+                                painterResource(it.icon),
+                                contentDescription = it.label
+                            )
+                        },
+                        label = { Text(it.label) },
+                        selected = it == currentDestination,
+                        onClick = { currentDestination = it }
+                    )
+                }
             }
-        }
-    ) {
-        Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-            Greeting(
-                name = "Android",
-                modifier = Modifier.padding(innerPadding)
-            )
+        ) {
+            Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                when (currentDestination) {
+                    AppDestinations.ZONES -> {
+                        HomeScreen(
+                            zones = zones,
+                            onAddZoneClick = {
+                                editingZone = null
+                                showAddZoneScreen = true
+                            },
+                            onToggleZone = { zoneId, isEnabled ->
+                                zones = zones.map { zone ->
+                                    if (zone.id == zoneId) zone.copy(isEnabled = isEnabled) else zone
+                                }
+                            },
+                            onEditZone = { zone ->
+                                editingZone = zone
+                                showAddZoneScreen = true
+                            },
+                            onDeleteZone = { zoneId ->
+                                zones = zones.filter { it.id != zoneId }
+                            },
+                            modifier = Modifier.padding(innerPadding)
+                        )
+                    }
+                    AppDestinations.CURRENT -> {
+                        CurrentScreen(
+                            modifier = Modifier.padding(innerPadding)
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -69,23 +119,6 @@ enum class AppDestinations(
     val label: String,
     val icon: Int,
 ) {
-    HOME("Home", R.drawable.ic_home),
-    FAVORITES("Favorites", R.drawable.ic_favorite),
-    PROFILE("Profile", R.drawable.ic_account_box),
-}
-
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    BoundsTheme {
-        Greeting("Android")
-    }
+    CURRENT("Current", R.drawable.ic_favorite),
+    ZONES("Zones", R.drawable.ic_home),
 }
