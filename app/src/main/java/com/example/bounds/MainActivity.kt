@@ -47,6 +47,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.bounds.model.AnalyticsEvent
 import com.example.bounds.model.ThemePreference
 import com.example.bounds.model.Zone
@@ -77,8 +78,13 @@ fun BoundsApp() {
     val context = LocalContext.current
     val app = context.applicationContext as BoundsApplication
 
+    // ── ViewModel (persisted state) ───────────────────────────────────────────
+    val boundsViewModel: BoundsViewModel = viewModel(factory = BoundsViewModel.Factory)
+    val zones by boundsViewModel.zones.collectAsState()
+    val analyticsEvents by boundsViewModel.analyticsEvents.collectAsState()
+
     // ── App-wide settings ─────────────────────────────────────────────────────
-    // Step 1: default to DARK so the app always opens in dark mode
+    // Default to DARK so the app always opens in dark mode
     var themePreference by rememberSaveable { mutableStateOf(ThemePreference.DARK) }
     var graceTimerSeconds by rememberSaveable { mutableStateOf(0) }
 
@@ -107,10 +113,7 @@ fun BoundsApp() {
         if (granted) BoundsGeofenceManager.syncGeofences(context, app.zones)
     }
 
-    // ── Data state ────────────────────────────────────────────────────────────
-    var zones by rememberSaveable { mutableStateOf<List<Zone>>(emptyList()) }
-    var analyticsEvents by rememberSaveable { mutableStateOf<List<AnalyticsEvent>>(emptyList()) }
-
+    // ── Sync zone list to Application singleton + platform geofences ──────────
     LaunchedEffect(zones, hasFineLocation) {
         app.zones = zones
         if (hasFineLocation) BoundsGeofenceManager.syncGeofences(context, zones)
@@ -118,10 +121,11 @@ fun BoundsApp() {
 
     val activeEnforcement by app.activeEnforcement.collectAsState()
 
+    // ── Consume analytics events produced by GeofenceEnforcementService ───────
     val pendingAnalytics by app.pendingAnalytics.collectAsState()
     LaunchedEffect(pendingAnalytics) {
         pendingAnalytics?.let { event ->
-            analyticsEvents = analyticsEvents + event
+            boundsViewModel.addEvent(event)
             app.consumeAnalyticsEvent()
         }
     }
@@ -146,7 +150,7 @@ fun BoundsApp() {
             else               -> NavLayer.MAIN
         }
 
-        // Step 3: slide full-screen flows in from the right; back-action slides out
+        // Slide full-screen flows in from the right; back-action slides out
         AnimatedContent(
             targetState = navLayer,
             transitionSpec = {
@@ -170,7 +174,7 @@ fun BoundsApp() {
                         onThemeChange         = { themePreference = it },
                         graceTimerSeconds     = graceTimerSeconds,
                         onGraceTimerChange    = { graceTimerSeconds = it },
-                        onDeleteAnalyticsData = { analyticsEvents = emptyList() },
+                        onDeleteAnalyticsData = { boundsViewModel.clearEvents() },
                         onBack                = { showSettingsScreen = false }
                     )
                 }
@@ -178,11 +182,12 @@ fun BoundsApp() {
                 NavLayer.ADD_ZONE -> {
                     AddZoneScreen(
                         onSave = { newZone ->
-                            zones = if (editingZone != null) {
+                            val updatedZones = if (editingZone != null) {
                                 zones.map { if (it.id == editingZone!!.id) newZone else it }
                             } else {
                                 zones + newZone
                             }
+                            boundsViewModel.saveZones(updatedZones)
                             showAddZoneScreen = false
                             editingZone = null
                         },
@@ -234,7 +239,7 @@ fun BoundsApp() {
                             containerColor = MaterialTheme.colorScheme.background
                         ) { innerPadding ->
 
-                            // Step 2: crossfade between tabs (~200 ms)
+                            // Crossfade between tabs (~200 ms)
                             Crossfade(
                                 targetState   = currentDestination,
                                 animationSpec = tween(200),
@@ -250,15 +255,17 @@ fun BoundsApp() {
                                                 showAddZoneScreen = true
                                             },
                                             onToggleZone   = { id, enabled ->
-                                                zones = zones.map {
-                                                    if (it.id == id) it.copy(isEnabled = enabled) else it
-                                                }
+                                                boundsViewModel.saveZones(
+                                                    zones.map { if (it.id == id) it.copy(isEnabled = enabled) else it }
+                                                )
                                             },
                                             onEditZone     = { zone ->
                                                 editingZone = zone
                                                 showAddZoneScreen = true
                                             },
-                                            onDeleteZone   = { id -> zones = zones.filter { it.id != id } }
+                                            onDeleteZone   = { id ->
+                                                boundsViewModel.saveZones(zones.filter { it.id != id })
+                                            }
                                         )
                                     }
 
@@ -304,12 +311,14 @@ fun BoundsApp() {
                                                 }
                                             },
                                             onManualBlockingStarted     = { appName, durationMinutes ->
-                                                analyticsEvents = analyticsEvents + AnalyticsEvent(
-                                                    id              = UUID.randomUUID().toString(),
-                                                    appName         = appName,
-                                                    zoneName        = "Manual Block",
-                                                    durationMinutes = durationMinutes,
-                                                    timestampMs     = System.currentTimeMillis()
+                                                boundsViewModel.addEvent(
+                                                    AnalyticsEvent(
+                                                        id              = UUID.randomUUID().toString(),
+                                                        appName         = appName,
+                                                        zoneName        = "Manual Block",
+                                                        durationMinutes = durationMinutes,
+                                                        timestampMs     = System.currentTimeMillis()
+                                                    )
                                                 )
                                             }
                                         )

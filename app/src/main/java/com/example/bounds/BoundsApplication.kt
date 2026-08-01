@@ -1,6 +1,8 @@
 package com.example.bounds
 
 import android.app.Application
+import com.example.bounds.data.AnalyticsRepository
+import com.example.bounds.data.ZoneRepository
 import com.example.bounds.model.ActiveEnforcementInfo
 import com.example.bounds.model.AnalyticsEvent
 import com.example.bounds.model.Zone
@@ -14,6 +16,12 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 class BoundsApplication : Application() {
 
+    // ── Repositories (persistent storage) ────────────────────────────────────
+    lateinit var zoneRepository: ZoneRepository
+        private set
+    lateinit var analyticsRepository: AnalyticsRepository
+        private set
+
     // ── Active zone enforcement ───────────────────────────────────────────────
     private val _activeEnforcement = MutableStateFlow<ActiveEnforcementInfo?>(null)
     val activeEnforcement: StateFlow<ActiveEnforcementInfo?> = _activeEnforcement.asStateFlow()
@@ -23,13 +31,19 @@ class BoundsApplication : Application() {
     val pendingAnalytics: StateFlow<AnalyticsEvent?> = _pendingAnalytics.asStateFlow()
 
     /**
-     * In-memory zone list kept in sync from MainActivity so the
+     * In-memory zone list kept in sync from the ViewModel so the
      * GeofenceBroadcastReceiver can resolve geofence IDs → zone data.
      */
     @Volatile var zones: List<Zone> = emptyList()
 
     /** Grace-timer preference kept in sync from Settings. */
     @Volatile var graceTimerSeconds: Int = 0
+
+    override fun onCreate() {
+        super.onCreate()
+        zoneRepository = ZoneRepository(this)
+        analyticsRepository = AnalyticsRepository(this)
+    }
 
     fun setEnforcement(info: ActiveEnforcementInfo?) { _activeEnforcement.value = info }
     fun postAnalyticsEvent(event: AnalyticsEvent) { _pendingAnalytics.value = event }

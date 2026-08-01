@@ -49,6 +49,11 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended:1.7.8")
     // Location + geofencing
     implementation("com.google.android.gms:play-services-location:21.3.0")
+    // Persistence
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
+    implementation("com.google.code.gson:gson:2.11.0")
+    // ViewModel
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.11.0")
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
