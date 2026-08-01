@@ -19,7 +19,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.Apps
-import androidx.compose.material.icons.filled.Bell
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Delete
@@ -122,7 +121,7 @@ fun SettingsScreen(
             SettingsGroup(label = "PROTECTION") {
                 // Block intensity
                 SettingsRow(
-                    icon = Icons.Default.Security,
+                    icon = Icons.Filled.Security,
                     label = "Block intensity",
                     value = "Strict",
                     soon = true
@@ -147,7 +146,7 @@ fun SettingsScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Schedule,
+                                    imageVector = Icons.Filled.Schedule,
                                     contentDescription = null,
                                     tint = TextMuted,
                                     modifier = Modifier.size(16.dp)
@@ -185,7 +184,7 @@ fun SettingsScreen(
                 }
                 SettingsDivider()
                 SettingsRow(
-                    icon = Icons.Default.Bell,
+                    icon = Icons.Filled.ChevronRight,
                     label = "Entry notifications",
                     value = "On",
                     soon = true
@@ -230,14 +229,14 @@ fun SettingsScreen(
             // ── BLOCKED APPS ──────────────────────────────────────────────────
             SettingsGroup(label = "BLOCKED APPS") {
                 SettingsRow(
-                    icon = Icons.Default.Apps,
+                    icon = Icons.Filled.Apps,
                     label = "App blocklist",
                     value = "3 apps",
                     soon = true
                 )
                 SettingsDivider()
                 SettingsRow(
-                    icon = Icons.Default.Language,
+                    icon = Icons.Filled.Language,
                     label = "Website blocklist",
                     value = "Off",
                     soon = true
@@ -246,26 +245,26 @@ fun SettingsScreen(
 
             // ── ACCOUNT ───────────────────────────────────────────────────────
             SettingsGroup(label = "ACCOUNT") {
-                SettingsRow(icon = Icons.Default.Person,   label = "Profile",        soon = true)
+                SettingsRow(icon = Icons.Filled.Person,   label = "Profile",        soon = true)
                 SettingsDivider()
-                SettingsRow(icon = Icons.Default.Cloud,    label = "Sync & backup",  value = "Off", soon = true)
+                SettingsRow(icon = Icons.Filled.Cloud,    label = "Sync & backup",  value = "Off", soon = true)
                 SettingsDivider()
-                SettingsRow(icon = Icons.Default.Lock,     label = "Passcode lock",  value = "Off", soon = true)
+                SettingsRow(icon = Icons.Filled.Lock,     label = "Passcode lock",  value = "Off", soon = true)
             }
 
             // ── ABOUT ─────────────────────────────────────────────────────────
             SettingsGroup(label = "ABOUT") {
                 SettingsRow(
-                    icon = Icons.Default.Info,
+                    icon = Icons.Filled.Info,
                     label = "App version",
                     value = "0.1.0-beta",
                     soon = false,
                     showArrow = true
                 )
                 SettingsDivider()
-                SettingsRow(icon = Icons.Default.Language, label = "Privacy policy", soon = true)
+                SettingsRow(icon = Icons.Filled.Language, label = "Privacy policy", soon = true)
                 SettingsDivider()
-                SettingsRow(icon = Icons.Default.Send,     label = "Send feedback",  soon = true)
+                SettingsRow(icon = Icons.Filled.Send,     label = "Send feedback",  soon = true)
             }
 
             // ── DATA ──────────────────────────────────────────────────────────
@@ -287,7 +286,7 @@ fun SettingsScreen(
                         )
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Delete,
+                            imageVector = Icons.Filled.Delete,
                             contentDescription = null,
                             modifier = Modifier.size(16.dp)
                         )
@@ -420,7 +419,7 @@ private fun SettingsRow(
         if (soon) SoonBadge()
         if (showArrow) {
             Icon(
-                imageVector = Icons.Default.ChevronRight,
+                imageVector = Icons.Filled.ChevronRight,
                 contentDescription = null,
                 tint = TextSubtle,
                 modifier = Modifier.size(16.dp)
