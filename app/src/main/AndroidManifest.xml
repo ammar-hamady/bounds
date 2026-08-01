@@ -44,6 +44,17 @@
             </intent-filter>
         </activity>
 
+        <!-- Overlay shown when a blocked app is brought to the foreground -->
+        <activity
+                android:name=".ui.screens.BlockedOverlayActivity"
+                android:exported="false"
+                android:excludeFromRecents="true"
+                android:noHistory="true"
+                android:showOnLockScreen="true"
+                android:theme="@style/Theme.Bounds.BlockedOverlay"
+                android:taskAffinity=""
+                android:launchMode="singleTask"/>
+
         <!-- App-blocking foreground service -->
         <service
                 android:name=".service.AppBlockingService"
