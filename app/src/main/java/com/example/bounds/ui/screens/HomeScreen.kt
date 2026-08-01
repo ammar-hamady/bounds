@@ -1,8 +1,10 @@
 package com.example.bounds.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -10,26 +12,35 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.bounds.R
 import com.example.bounds.model.Zone
-import com.example.bounds.ui.components.ZoneCard
+import com.example.bounds.ui.theme.Amber
+import com.example.bounds.ui.theme.AmberDim
+import com.example.bounds.ui.theme.BgElevated
+import com.example.bounds.ui.theme.BgSurface
+import com.example.bounds.ui.theme.BorderDim
+import com.example.bounds.ui.theme.DividerLine
+import com.example.bounds.ui.theme.TextMuted
+import com.example.bounds.ui.theme.TextSubtle
 
 @Composable
 fun HomeScreen(
@@ -40,132 +51,165 @@ fun HomeScreen(
     onDeleteZone: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    Column(
+    val activeCount = zones.count { it.isEnabled }
+
+    LazyColumn(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .padding(16.dp)
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(0.dp)
     ) {
-        // Header
-        Column(modifier = Modifier.fillMaxWidth()) {
+        // Subtitle
+        item {
+            Spacer(Modifier.height(8.dp))
             Text(
-                text = "Your Sacred Spaces",
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Manage your focus zones",
+                text = if (zones.isEmpty()) "No zones yet"
+                       else "$activeCount of ${zones.size} zones active",
                 fontSize = 14.sp,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
+                color = TextMuted
             )
+            Spacer(Modifier.height(20.dp))
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // Stats Section
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    color = MaterialTheme.colorScheme.surface,
-                    shape = RoundedCornerShape(12.dp)
-                )
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            StatItem(
-                label = "Active Zones",
-                value = "${zones.count { it.isEnabled }}"
-            )
-            StatItem(
-                label = "Total Apps",
-                value = "${zones.sumOf { it.blockedApps.size }}"
-            )
-            StatItem(
-                label = "Reclaimed Time",
-                value = "12h"
-            )
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Zones List
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            items(zones) { zone ->
-                ZoneCard(
-                    name = zone.name,
-                    startTime = zone.startTime,
-                    endTime = zone.endTime,
-                    blockedAppsCount = zone.blockedApps.size,
-                    isEnabled = zone.isEnabled,
-                    onToggle = { newState ->
-                        onToggleZone(zone.id, newState)
-                    },
-                    onEdit = { onEditZone(zone) },
-                    onDelete = { onDeleteZone(zone.id) }
+        // Section label
+        if (zones.isNotEmpty()) {
+            item {
+                Text(
+                    text = "YOUR ZONES",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 1.4.sp,
+                    color = TextSubtle,
+                    modifier = Modifier.padding(bottom = 10.dp)
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        // Grouped zone list
+        if (zones.isNotEmpty()) {
+            item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(BgSurface)
+                ) {
+                    zones.forEachIndexed { index, zone ->
+                        ZoneRow(
+                            zone = zone,
+                            onToggle = { onToggleZone(zone.id, it) },
+                            onEdit   = { onEditZone(zone) },
+                            onDelete = { onDeleteZone(zone.id) }
+                        )
+                        if (index < zones.lastIndex) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 68.dp)
+                                    .height(1.dp)
+                                    .background(DividerLine)
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(16.dp))
+            }
+        }
 
-        // Add Zone Button
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    color = MaterialTheme.colorScheme.surface,
-                    shape = RoundedCornerShape(12.dp)
+        // Add New Zone — dashed border button
+        item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .border(1.5.dp, BorderDim, RoundedCornerShape(16.dp))
+                    .clickable(onClick = onAddZoneClick)
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = null,
+                    tint = Amber,
+                    modifier = Modifier.size(20.dp)
                 )
-                .clickable(onClick = onAddZoneClick)
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                painter = painterResource(R.drawable.ic_home),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(end = 8.dp)
-            )
-            Text(
-                text = "+ Add New Zone",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
+                Text(
+                    text = "Add New Zone",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Amber
+                )
+            }
+            Spacer(Modifier.height(24.dp))
         }
     }
 }
 
 @Composable
-fun StatItem(
-    label: String,
-    value: String,
-    modifier: Modifier = Modifier
+private fun ZoneRow(
+    zone: Zone,
+    onToggle: (Boolean) -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
 ) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onEdit)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text(
-            text = value,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary
-        )
-        Text(
-            text = label,
-            fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+        // Icon container
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(if (zone.isEnabled) AmberDim else BgElevated),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.LocationOn,
+                contentDescription = null,
+                tint = if (zone.isEnabled) Amber else TextMuted,
+                modifier = Modifier.size(22.dp)
+            )
+        }
+
+        // Text info
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = zone.name,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1
+            )
+            val subtitle = buildString {
+                if (zone.isTimeSensitive) append("${zone.startTime} – ${zone.endTime} · ")
+                append("${zone.radiusMeters}m radius")
+            }
+            Text(
+                text = subtitle,
+                fontSize = 12.sp,
+                color = TextMuted,
+                maxLines = 1
+            )
+        }
+
+        // Toggle
+        Switch(
+            checked = zone.isEnabled,
+            onCheckedChange = onToggle,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor      = Color.White,
+                checkedTrackColor      = Amber,
+                uncheckedThumbColor    = Color.White,
+                uncheckedTrackColor    = BgElevated,
+                uncheckedBorderColor   = BorderDim
+            )
         )
     }
 }

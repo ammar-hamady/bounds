@@ -1,66 +1,61 @@
 package com.example.bounds.ui.theme
 
-import android.app.Activity
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 
+// ── Dark scheme (default / always-on for Bounds) ─────────────────────────────
 private val DarkColorScheme = darkColorScheme(
-    primary = Orange80,
-    secondary = OrangeGrey80,
-    tertiary = Orange40,
-    background = DarkSurface,
-    surface = SurfaceVariant,
-    onPrimary = DarkSurface,
-    onSecondary = DarkSurface,
-    onTertiary = DarkSurface,
-    onBackground = Color.White,
-    onSurface = Color.White
+    primary          = Amber,
+    onPrimary        = BgPrimary,
+    primaryContainer = AmberDim,
+    onPrimaryContainer = Amber,
+    secondary        = TextMuted,
+    onSecondary      = BgPrimary,
+    background       = BgPrimary,
+    onBackground     = TextPrimary,
+    surface          = BgSurface,
+    onSurface        = TextPrimary,
+    surfaceVariant   = BgElevated,
+    onSurfaceVariant = TextMuted,
+    outline          = BorderDim,
+    error            = ErrorRed,
+    onError          = Color.White
 )
 
+// ── Light scheme ──────────────────────────────────────────────────────────────
 private val LightColorScheme = lightColorScheme(
-    primary = Orange40,
-    secondary = OrangeGrey80,
-    tertiary = Orange80
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+    primary          = Amber,
+    onPrimary        = Color.White,
+    primaryContainer = AmberDim,
+    onPrimaryContainer = Amber,
+    secondary        = TextMuted,
+    onSecondary      = Color.White,
+    background       = Color(0xFFF5F5F5),
+    onBackground     = Color(0xFF111111),
+    surface          = Color.White,
+    onSurface        = Color(0xFF111111),
+    surfaceVariant   = Color(0xFFEEEEEE),
+    onSurfaceVariant = Color(0xFF666666),
+    outline          = Color(0xFFDDDDDD),
+    error            = ErrorRed,
+    onError          = Color.White
 )
 
 @Composable
 fun BoundsTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = true,
+    dynamicColor: Boolean = false, // disabled — always use Bounds palette
     content: @Composable () -> Unit
 ) {
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
-    }
+    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
 
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = Typography,
-        content = content
+        typography  = Typography,
+        content     = content
     )
 }

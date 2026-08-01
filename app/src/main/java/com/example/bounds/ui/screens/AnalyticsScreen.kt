@@ -25,112 +25,337 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.bounds.model.AnalyticsEvent
+import com.example.bounds.ui.theme.Amber
+import com.example.bounds.ui.theme.AmberDim
+import com.example.bounds.ui.theme.BgElevated
+import com.example.bounds.ui.theme.BgSurface
+import com.example.bounds.ui.theme.TextMuted
+import com.example.bounds.ui.theme.TextSubtle
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+
+// ── Zone breakdown colours ────────────────────────────────────────────────────
+private val ZoneColors = listOf(
+    Amber,
+    Color(0xFF6B8EFF),
+    Color(0xFF4CAF82),
+    Color(0xFFE57373),
+    Color(0xFFBA68C8)
+)
 
 @Composable
 fun AnalyticsScreen(
     events: List<AnalyticsEvent>,
     modifier: Modifier = Modifier
 ) {
-    val totalSessions = events.size
-    val totalMinutes = events.sumOf { it.durationMinutes }
-    val topApp = events.groupingBy { it.appName }
-        .eachCount()
-        .maxByOrNull { it.value }
-        ?.key ?: "—"
-
-    // Build last-7-days bar chart data
-    val dayBars = remember(events) { buildDayBars(events) }
+    val totalSessions  = events.size
+    val totalMinutes   = events.sumOf { it.durationMinutes }
+    val topApp         = events.groupingBy { it.appName }.eachCount()
+        .maxByOrNull { it.value }?.key ?: "—"
+    val streak         = 3 // placeholder
+    val dayBars        = remember(events) { buildDayBars(events) }
+    val byZone         = remember(events) {
+        events.groupBy { it.zoneName }
+            .mapValues { it.value.size }
+            .entries.sortedByDescending { it.value }
+            .take(5)
+    }
+    val byZoneTotal    = byZone.sumOf { it.value }.coerceAtLeast(1)
 
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
+        // "Coming soon" banner
         item {
-            Text(
-                text = "Analytics",
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Your blocking activity at a glance",
-                fontSize = 14.sp,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
-            )
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(BgSurface)
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(BgElevated),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.BarChart,
+                        contentDescription = null,
+                        tint = Amber,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+                Column {
+                    Text(
+                        text = "Full analytics coming soon",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Preview of what's being tracked",
+                        fontSize = 12.sp,
+                        color = TextMuted
+                    )
+                }
+            }
         }
 
         if (events.isEmpty()) {
             item { EmptyAnalyticsState() }
         } else {
+            // 2×2 stat card grid
             item {
-                // Summary cards
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    SummaryCard(
-                        label = "Sessions",
-                        value = "$totalSessions",
-                        modifier = Modifier.weight(1f)
-                    )
-                    SummaryCard(
-                        label = "Time Blocked",
+                    StatCard(
+                        emoji = "🛡️",
                         value = formatMinutes(totalMinutes),
+                        label = "Time protected",
+                        period = "this week",
                         modifier = Modifier.weight(1f)
                     )
-                    SummaryCard(
-                        label = "Top App",
-                        value = topApp,
+                    StatCard(
+                        emoji = "📍",
+                        value = "$totalSessions",
+                        label = "Zones triggered",
+                        period = "this week",
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    StatCard(
+                        emoji = "✅",
+                        value = "$totalSessions",
+                        label = "Unlocks avoided",
+                        period = "this week",
+                        modifier = Modifier.weight(1f)
+                    )
+                    StatCard(
+                        emoji = "🔥",
+                        value = "$streak days",
+                        label = "Streak",
+                        period = "current",
                         modifier = Modifier.weight(1f)
                     )
                 }
             }
+        }
 
-            item {
-                // 7-day bar chart
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp))
-                        .padding(16.dp)
+        // Bar chart — always shown (shows zeros if no events)
+        item {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(BgSurface)
+                    .padding(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Last 7 Days",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
+                        text = "Screen time blocked",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    WeekBarChart(dayBars = dayBars)
+                    PreviewBadge()
+                }
+                Spacer(Modifier.height(16.dp))
+                WeekBarChart(dayBars = dayBars)
+            }
+        }
+
+        // By zone breakdown
+        item {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(BgSurface)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "By zone",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    PreviewBadge()
+                }
+
+                if (byZone.isEmpty()) {
+                    // placeholder rows matching the mockup
+                    listOf("Bedroom" to 48, "Dinner Table" to 31, "Office" to 21)
+                        .forEachIndexed { i, (name, pct) ->
+                            ZoneBreakdownRow(
+                                name = name,
+                                pct = pct,
+                                color = ZoneColors.getOrElse(i) { Amber }
+                            )
+                        }
+                } else {
+                    byZone.forEachIndexed { i, entry ->
+                        val pct = (entry.value * 100 / byZoneTotal)
+                        ZoneBreakdownRow(
+                            name = entry.key,
+                            pct = pct,
+                            color = ZoneColors.getOrElse(i) { Amber }
+                        )
+                    }
                 }
             }
+        }
 
+        // Recent sessions
+        if (events.isNotEmpty()) {
             item {
                 Text(
                     text = "Recent Sessions",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onBackground
                 )
             }
-
             items(events.sortedByDescending { it.timestampMs }) { event ->
                 SessionRow(event = event)
             }
         }
+
+        item { Spacer(Modifier.height(16.dp)) }
+    }
+}
+
+// ── Sub-composables ───────────────────────────────────────────────────────────
+
+@Composable
+private fun PreviewBadge() {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(4.dp))
+            .background(AmberDim)
+            .padding(horizontal = 8.dp, vertical = 3.dp)
+    ) {
+        Text(
+            text = "PREVIEW",
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.sp,
+            color = Amber
+        )
+    }
+}
+
+@Composable
+private fun StatCard(
+    emoji: String,
+    value: String,
+    label: String,
+    period: String,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(BgSurface)
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text(text = emoji, fontSize = 20.sp)
+        Spacer(Modifier.height(2.dp))
+        Text(
+            text = value,
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(text = label, fontSize = 12.sp, color = TextMuted)
+        Text(
+            text = period,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = Amber
+        )
+    }
+}
+
+@Composable
+private fun ZoneBreakdownRow(name: String, pct: Int, color: Color) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(10.dp)
+                .clip(RoundedCornerShape(50))
+                .background(color)
+        )
+        Text(
+            text = name,
+            fontSize = 13.sp,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f)
+        )
+        // Progress bar
+        Box(
+            modifier = Modifier
+                .width(64.dp)
+                .height(5.dp)
+                .clip(RoundedCornerShape(50))
+                .background(BgElevated)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(pct / 100f)
+                    .height(5.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(color)
+            )
+        }
+        Text(
+            text = "$pct%",
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = TextMuted,
+            modifier = Modifier.width(32.dp),
+            textAlign = TextAlign.End
+        )
     }
 }
 
@@ -147,45 +372,20 @@ private fun EmptyAnalyticsState() {
             imageVector = Icons.Default.BarChart,
             contentDescription = null,
             modifier = Modifier.size(64.dp),
-            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+            tint = Amber.copy(alpha = 0.3f)
         )
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(Modifier.height(16.dp))
         Text(
             text = "No sessions yet",
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
         )
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(Modifier.height(8.dp))
         Text(
             text = "Block an app from the Current tab\nto see your stats here.",
             fontSize = 14.sp,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
-            textAlign = TextAlign.Center
-        )
-    }
-}
-
-@Composable
-private fun SummaryCard(label: String, value: String, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier
-            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp))
-            .padding(12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = value,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
-            maxLines = 1
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = label,
-            fontSize = 11.sp,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+            color = TextSubtle,
             textAlign = TextAlign.Center
         )
     }
@@ -193,8 +393,8 @@ private fun SummaryCard(label: String, value: String, modifier: Modifier = Modif
 
 @Composable
 private fun WeekBarChart(dayBars: List<DayBar>) {
-    val maxCount = dayBars.maxOfOrNull { it.count } ?: 1
-    val barMaxHeight = 80.dp
+    val maxCount   = dayBars.maxOfOrNull { it.count }.let { if (it == null || it == 0) 1 else it }
+    val barMaxHeightDp = 80
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -210,28 +410,28 @@ private fun WeekBarChart(dayBars: List<DayBar>) {
                     Text(
                         text = "${bar.count}",
                         fontSize = 10.sp,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = Amber,
                         fontWeight = FontWeight.Bold
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(Modifier.height(4.dp))
                 }
-                val fraction = if (maxCount > 0) bar.count.toFloat() / maxCount else 0f
-                val barHeight = if (bar.count > 0) (barMaxHeight.value * fraction.coerceAtLeast(0.1f)).dp else 4.dp
+                val fraction  = bar.count.toFloat() / maxCount
+                val barHeight = if (bar.count > 0)
+                    (barMaxHeightDp * fraction.coerceAtLeast(0.08f)).dp
+                else 4.dp
+
                 Box(
                     modifier = Modifier
                         .width(28.dp)
                         .height(barHeight)
-                        .background(
-                            color = if (bar.count > 0) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
-                            shape = RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)
-                        )
+                        .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
+                        .background(if (bar.count > 0) Amber else BgElevated)
                 )
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(Modifier.height(6.dp))
                 Text(
                     text = bar.label,
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    fontSize = 10.sp,
+                    color = TextSubtle
                 )
             }
         }
@@ -243,24 +443,26 @@ private fun SessionRow(event: AnalyticsEvent) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(12.dp))
+            .background(BgSurface)
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
                 .size(36.dp)
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), RoundedCornerShape(8.dp)),
+                .clip(RoundedCornerShape(8.dp))
+                .background(AmberDim),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.Default.Lock,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
+                tint = Amber,
                 modifier = Modifier.size(18.dp)
             )
         }
-        Spacer(modifier = Modifier.width(12.dp))
+        Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = event.appName,
@@ -271,7 +473,7 @@ private fun SessionRow(event: AnalyticsEvent) {
             Text(
                 text = event.zoneName,
                 fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                color = TextMuted
             )
         }
         Column(horizontalAlignment = Alignment.End) {
@@ -279,46 +481,39 @@ private fun SessionRow(event: AnalyticsEvent) {
                 text = formatMinutes(event.durationMinutes),
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
+                color = Amber
             )
             Text(
                 text = formatTimestamp(event.timestampMs),
                 fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                color = TextSubtle
             )
         }
     }
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 data class DayBar(val label: String, val count: Int)
 
 private fun buildDayBars(events: List<AnalyticsEvent>): List<DayBar> {
-    val dayFormat = SimpleDateFormat("EEE", Locale.getDefault())
-    val dayKeyFormat = SimpleDateFormat("yyyyMMdd", Locale.getDefault())
-    val today = Calendar.getInstance()
-
-    val countsByDay = events.groupBy { dayKeyFormat.format(Date(it.timestampMs)) }
-        .mapValues { it.value.size }
-
-    return (6 downTo 0).map { daysAgo ->
-        val cal = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -daysAgo) }
-        val key = dayKeyFormat.format(cal.time)
-        val label = if (daysAgo == 0) "Today" else dayFormat.format(cal.time)
-        DayBar(label = label, count = countsByDay[key] ?: 0)
+    val dayFmt = SimpleDateFormat("EEE", Locale.getDefault())
+    val keyFmt = SimpleDateFormat("yyyyMMdd", Locale.getDefault())
+    val counts = events.groupBy { keyFmt.format(Date(it.timestampMs)) }.mapValues { it.value.size }
+    return (6 downTo 0).map { ago ->
+        val cal = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -ago) }
+        DayBar(
+            label = if (ago == 0) "Today" else dayFmt.format(cal.time),
+            count = counts[keyFmt.format(cal.time)] ?: 0
+        )
     }
 }
 
-private fun formatMinutes(minutes: Int): String {
-    return when {
-        minutes < 60 -> "${minutes}m"
-        minutes % 60 == 0 -> "${minutes / 60}h"
-        else -> "${minutes / 60}h ${minutes % 60}m"
-    }
+private fun formatMinutes(minutes: Int): String = when {
+    minutes < 60 -> "${minutes}m"
+    minutes % 60 == 0 -> "${minutes / 60}h"
+    else -> "${minutes / 60}h ${minutes % 60}m"
 }
 
-private fun formatTimestamp(ts: Long): String {
-    val fmt = SimpleDateFormat("MMM d, HH:mm", Locale.getDefault())
-    return fmt.format(Date(ts))
-}
+private fun formatTimestamp(ts: Long): String =
+    SimpleDateFormat("MMM d, HH:mm", Locale.getDefault()).format(Date(ts))

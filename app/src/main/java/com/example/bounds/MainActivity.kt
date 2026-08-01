@@ -187,6 +187,8 @@ fun BoundsApp() {
                                         )
                                         analyticsEvents = analyticsEvents + event
                                     },
+                                    graceTimerSeconds = graceTimerSeconds,
+                                    currentZoneName = zones.firstOrNull { it.isEnabled }?.name,
                                     modifier = Modifier.padding(innerPadding)
                                 )
                             }
