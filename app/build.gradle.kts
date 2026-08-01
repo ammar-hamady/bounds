@@ -45,9 +45,10 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material3.adaptive.navigation.suite)
     implementation(libs.google.play.services.maps)
-    implementation(libs.google.play.services.location)
     implementation(libs.maps.compose)
     implementation("androidx.compose.material:material-icons-extended:1.7.8")
+    // Location + geofencing
+    implementation("com.google.android.gms:play-services-location:21.3.0")
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

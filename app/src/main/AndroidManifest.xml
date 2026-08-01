@@ -2,15 +2,23 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
           xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Location -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Required for geofencing while the app is in the background (Android 10+) -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+
+    <!-- General -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
+            android:name=".BoundsApplication"
             android:allowBackup="true"
             android:dataExtractionRules="@xml/data_extraction_rules"
             android:fullBackupContent="@xml/backup_rules"
@@ -19,9 +27,12 @@
             android:roundIcon="@mipmap/ic_launcher_round"
             android:supportsRtl="true"
             android:theme="@style/Theme.Bounds">
+
         <meta-data
             android:name="com.google.android.geo.API_KEY"
             android:value="AIzaSyCJxmDZxr8soPtBv7BagMLqp9eBboitLAY" />
+
+        <!-- Main activity -->
         <activity
                 android:name=".MainActivity"
                 android:exported="true"
@@ -29,14 +40,34 @@
                 android:theme="@style/Theme.Bounds">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
-
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+
+        <!-- App-blocking foreground service -->
         <service
                 android:name=".service.AppBlockingService"
+                android:foregroundServiceType="specialUse"
+                android:exported="false"
+                tools:ignore="ForegroundServicePermission"/>
+
+        <!-- Geofence enforcement foreground service -->
+        <service
+                android:name=".service.GeofenceEnforcementService"
                 android:foregroundServiceType="location"
-                android:exported="false" tools:ignore="ForegroundServicePermission"/>
+                android:exported="false"
+                tools:ignore="ForegroundServicePermission"/>
+
+        <!-- Geofence transition receiver -->
+        <receiver
+                android:name=".receiver.GeofenceBroadcastReceiver"
+                android:exported="false">
+            <intent-filter>
+                <action android:name="com.example.bounds.ACTION_ZONE_ENTER"/>
+                <action android:name="com.example.bounds.ACTION_ZONE_EXIT"/>
+            </intent-filter>
+        </receiver>
+
     </application>
 
 </manifest>

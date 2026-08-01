@@ -1,9 +1,14 @@
 package com.example.bounds
 
+import android.Manifest
+import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -22,79 +27,130 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.example.bounds.model.AnalyticsEvent
 import com.example.bounds.model.ThemePreference
 import com.example.bounds.model.Zone
+import com.example.bounds.service.GeofenceEnforcementService
 import com.example.bounds.ui.screens.AddZoneScreen
 import com.example.bounds.ui.screens.AnalyticsScreen
 import com.example.bounds.ui.screens.CurrentScreen
 import com.example.bounds.ui.screens.HomeScreen
 import com.example.bounds.ui.screens.SettingsScreen
 import com.example.bounds.ui.theme.BoundsTheme
+import com.example.bounds.util.BoundsGeofenceManager
 import java.util.UUID
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent {
-            BoundsApp()
-        }
+        setContent { BoundsApp() }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BoundsApp() {
+    val context = LocalContext.current
+    val app = context.applicationContext as BoundsApplication
+
     // ── App-wide settings ─────────────────────────────────────────────────────
     var themePreference by rememberSaveable { mutableStateOf(ThemePreference.SYSTEM) }
     var graceTimerSeconds by rememberSaveable { mutableStateOf(0) }
 
+    // Keep Application singleton in sync with settings state
+    LaunchedEffect(graceTimerSeconds) { app.graceTimerSeconds = graceTimerSeconds }
+
+    // ── Location permissions ──────────────────────────────────────────────────
+    var hasFineLocation by remember {
+        mutableStateOf(BoundsGeofenceManager.hasFineLocation(context))
+    }
+    var hasBackgroundLocation by remember {
+        mutableStateOf(BoundsGeofenceManager.hasBackgroundLocation(context))
+    }
+
+    val fineLocationLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { perms ->
+        hasFineLocation = perms[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+                          perms[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        hasBackgroundLocation = BoundsGeofenceManager.hasBackgroundLocation(context)
+    }
+
+    val bgLocationLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        hasBackgroundLocation = granted
+        if (granted) BoundsGeofenceManager.syncGeofences(context, app.zones)
+    }
+
+    // ── Data state ────────────────────────────────────────────────────────────
+    var zones by rememberSaveable { mutableStateOf<List<Zone>>(emptyList()) }
+    var analyticsEvents by rememberSaveable { mutableStateOf<List<AnalyticsEvent>>(emptyList()) }
+
+    // Sync zone list to Application singleton + update platform geofences
+    LaunchedEffect(zones, hasFineLocation) {
+        app.zones = zones
+        if (hasFineLocation) BoundsGeofenceManager.syncGeofences(context, zones)
+    }
+
+    // Collect enforcement state from services (via Application)
+    val activeEnforcement by app.activeEnforcement.collectAsState()
+
+    // Consume analytics events produced by GeofenceEnforcementService
+    val pendingAnalytics by app.pendingAnalytics.collectAsState()
+    LaunchedEffect(pendingAnalytics) {
+        pendingAnalytics?.let { event ->
+            analyticsEvents = analyticsEvents + event
+            app.consumeAnalyticsEvent()
+        }
+    }
+
+    // ── Theme ─────────────────────────────────────────────────────────────────
     val systemDark = isSystemInDarkTheme()
     val isDark = when (themePreference) {
-        ThemePreference.DARK -> true
-        ThemePreference.LIGHT -> false
+        ThemePreference.DARK   -> true
+        ThemePreference.LIGHT  -> false
         ThemePreference.SYSTEM -> systemDark
     }
 
     BoundsTheme(darkTheme = isDark, dynamicColor = false) {
-        // ── Navigation state ──────────────────────────────────────────────────
         var currentDestination by rememberSaveable { mutableStateOf(AppDestinations.ZONES) }
-        var showAddZoneScreen by rememberSaveable { mutableStateOf(false) }
+        var showAddZoneScreen  by rememberSaveable { mutableStateOf(false) }
         var showSettingsScreen by rememberSaveable { mutableStateOf(false) }
-        var editingZone by rememberSaveable { mutableStateOf<Zone?>(null) }
-
-        // ── Data state ────────────────────────────────────────────────────────
-        var zones by rememberSaveable { mutableStateOf<List<Zone>>(emptyList()) }
-        var analyticsEvents by rememberSaveable { mutableStateOf<List<AnalyticsEvent>>(emptyList()) }
+        var editingZone        by rememberSaveable { mutableStateOf<Zone?>(null) }
 
         when {
             showSettingsScreen -> {
                 SettingsScreen(
-                    themePreference = themePreference,
-                    onThemeChange = { themePreference = it },
-                    graceTimerSeconds = graceTimerSeconds,
-                    onGraceTimerChange = { graceTimerSeconds = it },
+                    themePreference      = themePreference,
+                    onThemeChange        = { themePreference = it },
+                    graceTimerSeconds    = graceTimerSeconds,
+                    onGraceTimerChange   = { graceTimerSeconds = it },
                     onDeleteAnalyticsData = { analyticsEvents = emptyList() },
-                    onBack = { showSettingsScreen = false }
+                    onBack               = { showSettingsScreen = false }
                 )
             }
 
             showAddZoneScreen -> {
                 AddZoneScreen(
                     onSave = { newZone ->
-                        if (editingZone != null) {
-                            zones = zones.map { if (it.id == editingZone!!.id) newZone else it }
+                        zones = if (editingZone != null) {
+                            zones.map { if (it.id == editingZone!!.id) newZone else it }
                         } else {
-                            zones = zones + newZone
+                            zones + newZone
                         }
                         showAddZoneScreen = false
                         editingZone = null
@@ -112,15 +168,10 @@ fun BoundsApp() {
                     navigationSuiteItems = {
                         AppDestinations.entries.forEach { dest ->
                             item(
-                                icon = {
-                                    Icon(
-                                        imageVector = dest.icon,
-                                        contentDescription = dest.label
-                                    )
-                                },
-                                label = { Text(dest.label) },
+                                icon     = { Icon(imageVector = dest.icon, contentDescription = dest.label) },
+                                label    = { Text(dest.label) },
                                 selected = dest == currentDestination,
-                                onClick = { currentDestination = dest }
+                                onClick  = { currentDestination = dest }
                             )
                         }
                     }
@@ -131,15 +182,15 @@ fun BoundsApp() {
                             TopAppBar(
                                 title = {
                                     Text(
-                                        text = currentDestination.label,
-                                        fontSize = 20.sp,
+                                        text       = currentDestination.label,
+                                        fontSize   = 20.sp,
                                         fontWeight = FontWeight.Bold
                                     )
                                 },
                                 actions = {
                                     IconButton(onClick = { showSettingsScreen = true }) {
                                         Icon(
-                                            imageVector = Icons.Default.Settings,
+                                            imageVector    = Icons.Default.Settings,
                                             contentDescription = "Settings"
                                         )
                                     }
@@ -152,50 +203,84 @@ fun BoundsApp() {
                         containerColor = MaterialTheme.colorScheme.background
                     ) { innerPadding ->
                         when (currentDestination) {
+
                             AppDestinations.ZONES -> {
                                 HomeScreen(
-                                    zones = zones,
+                                    zones         = zones,
                                     onAddZoneClick = {
                                         editingZone = null
                                         showAddZoneScreen = true
                                     },
-                                    onToggleZone = { zoneId, isEnabled ->
-                                        zones = zones.map { zone ->
-                                            if (zone.id == zoneId) zone.copy(isEnabled = isEnabled) else zone
-                                        }
+                                    onToggleZone  = { id, enabled ->
+                                        zones = zones.map { if (it.id == id) it.copy(isEnabled = enabled) else it }
                                     },
-                                    onEditZone = { zone ->
+                                    onEditZone    = { zone ->
                                         editingZone = zone
                                         showAddZoneScreen = true
                                     },
-                                    onDeleteZone = { zoneId ->
-                                        zones = zones.filter { it.id != zoneId }
-                                    },
-                                    modifier = Modifier.padding(innerPadding)
+                                    onDeleteZone  = { id -> zones = zones.filter { it.id != id } },
+                                    modifier      = Modifier.padding(innerPadding)
                                 )
                             }
 
                             AppDestinations.CURRENT -> {
                                 CurrentScreen(
-                                    onBlockingStarted = { appName, durationMinutes ->
-                                        val event = AnalyticsEvent(
-                                            id = UUID.randomUUID().toString(),
-                                            appName = appName,
-                                            zoneName = "Manual Block",
-                                            durationMinutes = durationMinutes,
-                                            timestampMs = System.currentTimeMillis()
+                                    activeEnforcement       = activeEnforcement,
+                                    hasFineLocation         = hasFineLocation,
+                                    hasBackgroundLocation   = hasBackgroundLocation,
+                                    graceTimerSeconds       = graceTimerSeconds,
+                                    zones                   = zones,
+                                    onRequestFineLocation   = {
+                                        fineLocationLauncher.launch(
+                                            arrayOf(
+                                                Manifest.permission.ACCESS_FINE_LOCATION,
+                                                Manifest.permission.ACCESS_COARSE_LOCATION
+                                            )
                                         )
-                                        analyticsEvents = analyticsEvents + event
                                     },
-                                    graceTimerSeconds = graceTimerSeconds,
-                                    currentZoneName = zones.firstOrNull { it.isEnabled }?.name,
+                                    onRequestBackgroundLocation = {
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                            bgLocationLauncher.launch(
+                                                Manifest.permission.ACCESS_BACKGROUND_LOCATION
+                                            )
+                                        }
+                                    },
+                                    onSimulateEntry         = { zone ->
+                                        // Fire the enforcement service directly for testing
+                                        val intent = Intent(context, GeofenceEnforcementService::class.java).apply {
+                                            action = GeofenceEnforcementService.ACTION_ZONE_ENTER
+                                            putExtra(GeofenceEnforcementService.EXTRA_ZONE_ID,   zone.id)
+                                            putExtra(GeofenceEnforcementService.EXTRA_ZONE_NAME, zone.name)
+                                            putStringArrayListExtra(
+                                                GeofenceEnforcementService.EXTRA_BLOCKED_APPS,
+                                                ArrayList(zone.blockedApps)
+                                            )
+                                            putExtra(GeofenceEnforcementService.EXTRA_IS_TIME_SENSITIVE, zone.isTimeSensitive)
+                                            putExtra(GeofenceEnforcementService.EXTRA_START_TIME, zone.startTime)
+                                            putExtra(GeofenceEnforcementService.EXTRA_END_TIME,   zone.endTime)
+                                        }
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                            context.startForegroundService(intent)
+                                        } else {
+                                            context.startService(intent)
+                                        }
+                                    },
+                                    onManualBlockingStarted = { appName, durationMinutes ->
+                                        analyticsEvents = analyticsEvents + AnalyticsEvent(
+                                            id              = UUID.randomUUID().toString(),
+                                            appName         = appName,
+                                            zoneName        = "Manual Block",
+                                            durationMinutes = durationMinutes,
+                                            timestampMs     = System.currentTimeMillis()
+                                        )
+                                    },
                                     modifier = Modifier.padding(innerPadding)
                                 )
                             }
 
                             AppDestinations.ANALYTICS -> {
                                 AnalyticsScreen(
-                                    events = analyticsEvents,
+                                    events   = analyticsEvents,
                                     modifier = Modifier.padding(innerPadding)
                                 )
                             }
@@ -207,11 +292,8 @@ fun BoundsApp() {
     }
 }
 
-enum class AppDestinations(
-    val label: String,
-    val icon: ImageVector,
-) {
+enum class AppDestinations(val label: String, val icon: ImageVector) {
     CURRENT("Current", Icons.Default.MyLocation),
-    ZONES("Zones", Icons.Default.Home),
+    ZONES("Zones",     Icons.Default.Home),
     ANALYTICS("Analytics", Icons.Default.BarChart),
 }
