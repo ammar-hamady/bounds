@@ -1,6 +1,10 @@
 package com.example.bounds.ui.components
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.location.Geocoder
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -20,8 +24,6 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -41,6 +43,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.GoogleMap
@@ -48,6 +52,9 @@ import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.maps.android.compose.rememberMarkerState
 import kotlin.math.roundToInt
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 @Composable
 fun MapLocationPicker(
@@ -61,7 +68,45 @@ fun MapLocationPicker(
     var searchQuery by remember { mutableStateOf("") }
     var suggestions by remember { mutableStateOf<List<LocationSuggestion>>(emptyList()) }
     var showSuggestions by remember { mutableStateOf(false) }
+    var locationPermissionGranted by remember { mutableStateOf(false) }
     val context = LocalContext.current
+
+    // Helper: check whether either location permission is currently held
+    fun checkPermission() {
+        locationPermissionGranted = ContextCompat.checkSelfPermission(
+            context, Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED ||
+        ContextCompat.checkSelfPermission(
+            context, Manifest.permission.ACCESS_COARSE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    // Runtime permission launcher — requests both fine and coarse; updates state on result
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        locationPermissionGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+            permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        // If permission was just granted, immediately snap to current location
+        if (locationPermissionGranted) {
+            val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
+            try {
+                fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+                    if (location != null) {
+                        currentLat = location.latitude
+                        currentLng = location.longitude
+                    }
+                }
+            } catch (e: SecurityException) {
+                // Granted but immediately revoked — ignore
+            }
+        }
+    }
+
+    // Check permission on composition
+    LaunchedEffect(Unit) {
+        checkPermission()
+    }
 
     val selectedLocation = LatLng(currentLat, currentLng)
     val cameraPositionState = rememberCameraPositionState {
@@ -73,6 +118,21 @@ fun MapLocationPicker(
         markerState.position = LatLng(currentLat, currentLng)
         onLocationChange(currentLat, currentLng)
         cameraPositionState.position = CameraPosition.fromLatLngZoom(LatLng(currentLat, currentLng), 15f)
+    }
+
+    // Debounced geocoder: runs off main thread, triggered 300ms after the query settles
+    LaunchedEffect(searchQuery) {
+        if (searchQuery.isNotEmpty()) {
+            delay(300)
+            val results = withContext(Dispatchers.IO) {
+                searchLocationSuggestions(searchQuery, context)
+            }
+            suggestions = results
+            showSuggestions = results.isNotEmpty()
+        } else {
+            suggestions = emptyList()
+            showSuggestions = false
+        }
     }
 
     Column(
@@ -98,12 +158,6 @@ fun MapLocationPicker(
                 value = searchQuery,
                 onValueChange = { query ->
                     searchQuery = query
-                    showSuggestions = query.isNotEmpty()
-                    if (query.isNotEmpty()) {
-                        suggestions = searchLocationSuggestions(query, context)
-                    } else {
-                        suggestions = emptyList()
-                    }
                 },
                 modifier = Modifier.fillMaxWidth(),
                 placeholder = { Text("Search address or location...") },
@@ -175,13 +229,31 @@ fun MapLocationPicker(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Current Location Button
+        // Current Location Button — requests permission if not yet granted, then fetches location
         Button(
             onClick = {
-                // Default to New York for now (in production, would use device location)
-                currentLat = 40.7128
-                currentLng = -74.0060
-                searchQuery = "Current Location"
+                if (locationPermissionGranted) {
+                    val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
+                    try {
+                        fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+                            if (location != null) {
+                                currentLat = location.latitude
+                                currentLng = location.longitude
+                                searchQuery = "Current Location"
+                            }
+                        }
+                    } catch (e: SecurityException) {
+                        // Permission revoked between check and use — ignore
+                    }
+                } else {
+                    // Request permission; on grant the launcher callback fetches location
+                    locationPermissionLauncher.launch(
+                        arrayOf(
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.ACCESS_COARSE_LOCATION
+                        )
+                    )
+                }
             },
             modifier = Modifier.fillMaxWidth(),
             colors = ButtonDefaults.buttonColors(
@@ -194,7 +266,10 @@ fun MapLocationPicker(
                 contentDescription = null,
                 modifier = Modifier.padding(end = 8.dp)
             )
-            Text("Return to Current Location")
+            Text(
+                if (locationPermissionGranted) "Return to Current Location"
+                else "Enable Location & Use Current"
+            )
         }
 
         Spacer(modifier = Modifier.height(12.dp))

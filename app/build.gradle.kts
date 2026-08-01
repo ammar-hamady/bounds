@@ -45,6 +45,7 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material3.adaptive.navigation.suite)
     implementation(libs.google.play.services.maps)
+    implementation(libs.google.play.services.location)
     implementation(libs.maps.compose)
     implementation("androidx.compose.material:material-icons-extended:1.7.8")
     testImplementation(libs.junit)

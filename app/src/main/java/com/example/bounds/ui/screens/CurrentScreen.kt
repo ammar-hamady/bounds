@@ -255,7 +255,7 @@ fun CurrentScreen(
             )
         ) {
             Text(
-                text = if (isLocked) "Unlock Phone" else "Unlock Phone",
+                text = if (isLocked) "Unlock" else "Lock",
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold
             )

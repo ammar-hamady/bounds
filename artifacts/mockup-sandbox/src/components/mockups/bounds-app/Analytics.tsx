@@ -27,7 +27,7 @@ export function Analytics() {
   return (
     <div className="h-screen w-full flex flex-col" style={{ backgroundColor: "#111111", fontFamily: "'Inter', system-ui, sans-serif", maxWidth: 390 }}>
       {/* Content */}
-      <div className="flex-1 overflow-y-auto px-4 pt-12 pb-4 flex flex-col gap-4">
+      <div className="flex-1 overflow-y-auto px-4 pt-12 pb-24 flex flex-col gap-4">
 
         {/* Coming soon banner */}
         <div className="flex items-center gap-3 p-3 rounded-2xl" style={{ backgroundColor: "#1C1C1E" }}>

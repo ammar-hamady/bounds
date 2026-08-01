@@ -6,7 +6,7 @@ function GridMap() {
   const COLS = 10, ROWS = 7;
   const cells = Array.from({ length: COLS * ROWS });
   return (
-    <div className="relative w-full overflow-hidden rounded-2xl" style={{ height: 200, backgroundColor: "#0d1f0d" }}>
+    <div className="relative w-full overflow-hidden rounded-2xl" style={{ height: 250, backgroundColor: "#0d1f0d" }}>
       {/* Grid cells */}
       <div
         className="absolute inset-0 grid"

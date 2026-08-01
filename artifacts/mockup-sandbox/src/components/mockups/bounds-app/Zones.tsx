@@ -79,10 +79,10 @@ export function Zones() {
           ))}
         </div>
 
-        {/* Add New Zone */}
+        {/* Add New Zone — full-width, visually separated from zone list */}
         <button
-          className="flex items-center gap-2 mt-4 px-5 py-3 rounded-2xl"
-          style={{ border: "1.5px dashed #333", backgroundColor: "transparent" }}>
+          className="flex items-center justify-center gap-2 mt-4 w-full px-5 py-3.5 rounded-2xl"
+          style={{ border: "1.5px dashed #444", backgroundColor: "transparent" }}>
           <span style={{ color: "#F5A623", fontSize: 18, fontWeight: 700 }}>+</span>
           <span className="text-sm font-semibold" style={{ color: "#F5A623" }}>Add New Zone</span>
         </button>
