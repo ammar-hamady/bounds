@@ -77,8 +77,10 @@ fun CurrentScreen(
     activeEnforcement: ActiveEnforcementInfo? = null,
     hasFineLocation: Boolean = false,
     hasBackgroundLocation: Boolean = true,
+    hasUsageStatsPermission: Boolean = true,
     onRequestFineLocation: () -> Unit = {},
     onRequestBackgroundLocation: () -> Unit = {},
+    onRequestUsageAccess: () -> Unit = {},
     zones: List<Zone> = emptyList(),
     onSimulateEntry: (Zone) -> Unit = {},
     onManualBlockingStarted: (appName: String, durationMinutes: Int) -> Unit = { _, _ -> },
@@ -154,6 +156,14 @@ fun CurrentScreen(
         } else if (!hasBackgroundLocation && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             BackgroundLocationBanner(
                 onRequestPermission = onRequestBackgroundLocation,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
+            )
+        }
+        if (!hasUsageStatsPermission) {
+            UsageAccessBanner(
+                onRequestUsageAccess = onRequestUsageAccess,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 6.dp)

@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -35,6 +36,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -47,6 +49,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.bounds.model.AnalyticsEvent
 import com.example.bounds.model.ThemePreference
@@ -59,6 +64,7 @@ import com.example.bounds.ui.screens.HomeScreen
 import com.example.bounds.ui.screens.SettingsScreen
 import com.example.bounds.ui.theme.BoundsTheme
 import com.example.bounds.util.BoundsGeofenceManager
+import com.example.bounds.util.PermissionUtils
 import java.util.UUID
 
 class MainActivity : ComponentActivity() {
@@ -89,6 +95,23 @@ fun BoundsApp() {
     var graceTimerSeconds by rememberSaveable { mutableStateOf(0) }
 
     LaunchedEffect(graceTimerSeconds) { app.graceTimerSeconds = graceTimerSeconds }
+
+    // ── Usage Access permission ───────────────────────────────────────────────
+    var hasUsageStatsPermission by remember {
+        mutableStateOf(PermissionUtils.hasUsageStatsPermission(context))
+    }
+
+    // Recheck whenever the app resumes (user may have just returned from Settings)
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                hasUsageStatsPermission = PermissionUtils.hasUsageStatsPermission(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     // ── Location permissions ──────────────────────────────────────────────────
     var hasFineLocation by remember {
@@ -170,12 +193,19 @@ fun BoundsApp() {
             when (layer) {
                 NavLayer.SETTINGS -> {
                     SettingsScreen(
-                        themePreference       = themePreference,
-                        onThemeChange         = { themePreference = it },
-                        graceTimerSeconds     = graceTimerSeconds,
-                        onGraceTimerChange    = { graceTimerSeconds = it },
-                        onDeleteAnalyticsData = { boundsViewModel.clearEvents() },
-                        onBack                = { showSettingsScreen = false }
+                        themePreference          = themePreference,
+                        onThemeChange            = { themePreference = it },
+                        graceTimerSeconds        = graceTimerSeconds,
+                        onGraceTimerChange       = { graceTimerSeconds = it },
+                        onDeleteAnalyticsData    = { boundsViewModel.clearEvents() },
+                        onBack                   = { showSettingsScreen = false },
+                        hasUsageStatsPermission  = hasUsageStatsPermission,
+                        onRequestUsageAccess     = {
+                            context.startActivity(
+                                Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            )
+                        }
                     )
                 }
 
@@ -274,6 +304,7 @@ fun BoundsApp() {
                                             activeEnforcement           = activeEnforcement,
                                             hasFineLocation             = hasFineLocation,
                                             hasBackgroundLocation       = hasBackgroundLocation,
+                                            hasUsageStatsPermission     = hasUsageStatsPermission,
                                             graceTimerSeconds           = graceTimerSeconds,
                                             zones                       = zones,
                                             onRequestFineLocation       = {
@@ -290,6 +321,12 @@ fun BoundsApp() {
                                                         Manifest.permission.ACCESS_BACKGROUND_LOCATION
                                                     )
                                                 }
+                                            },
+                                            onRequestUsageAccess        = {
+                                                context.startActivity(
+                                                    Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+                                                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                )
                                             },
                                             onSimulateEntry             = { zone ->
                                                 val intent = Intent(context, GeofenceEnforcementService::class.java).apply {

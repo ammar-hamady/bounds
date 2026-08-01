@@ -1,6 +1,7 @@
 package com.example.bounds.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,6 +30,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -77,6 +79,8 @@ fun SettingsScreen(
     onGraceTimerChange: (Int) -> Unit,
     onDeleteAnalyticsData: () -> Unit,
     onBack: () -> Unit,
+    hasUsageStatsPermission: Boolean = true,
+    onRequestUsageAccess: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -116,6 +120,14 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
             Spacer(Modifier.height(4.dp))
+
+            // ── USAGE ACCESS BANNER ───────────────────────────────────────────
+            if (!hasUsageStatsPermission) {
+                UsageAccessBanner(
+                    onRequestUsageAccess = onRequestUsageAccess,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
 
             // ── PROTECTION ────────────────────────────────────────────────────
             SettingsGroup(label = "PROTECTION") {
@@ -320,6 +332,43 @@ fun SettingsScreen(
                 TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
             }
         )
+    }
+}
+
+// ── Usage Access banner ───────────────────────────────────────────────────────
+
+@Composable
+fun UsageAccessBanner(onRequestUsageAccess: () -> Unit, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .background(AmberDim, RoundedCornerShape(14.dp))
+            .border(1.dp, Amber.copy(alpha = 0.3f), RoundedCornerShape(14.dp))
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Filled.VisibilityOff,
+            contentDescription = null,
+            tint = Amber,
+            modifier = Modifier.size(20.dp)
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Usage Access required",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Amber
+            )
+            Text(
+                text = "Enables reliable app blocking. Without it, blocked apps may not be detected.",
+                fontSize = 11.sp,
+                color = TextMuted
+            )
+        }
+        TextButton(onClick = onRequestUsageAccess) {
+            Text("Enable", fontSize = 12.sp, color = Amber, fontWeight = FontWeight.Bold)
+        }
     }
 }
 
