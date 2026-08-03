@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.LocationOff
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -380,7 +381,7 @@ fun CurrentScreen(
             )
         ) {
             Text(
-                text       = if (manualIsLocked || isBlocking) "Unlock Phone" else "Unlock Phone",
+                text       = if (manualIsLocked || isBlocking) "Unlock Phone" else "Lock Phone",
                 fontSize   = 16.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -453,10 +454,45 @@ private fun BackgroundLocationBanner(onRequestPermission: () -> Unit, modifier: 
         Icon(imageVector = Icons.Default.MyLocation, contentDescription = null, tint = TextMuted, modifier = Modifier.size(20.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text("Background location", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-            Text("Allow "All the time" for zones to trigger when the app is closed.", fontSize = 11.sp, color = TextMuted)
+            Text("Allow All the time for zones to trigger when the app is closed.", fontSize = 11.sp, color = TextMuted)
         }
         TextButton(onClick = onRequestPermission) {
             Text("Allow", fontSize = 12.sp, color = Amber, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+private fun UsageAccessBanner(onRequestUsageAccess: () -> Unit, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .background(AmberDim, RoundedCornerShape(14.dp))
+            .border(1.dp, Amber.copy(alpha = 0.3f), RoundedCornerShape(14.dp))
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Default.VisibilityOff,
+            contentDescription = null,
+            tint = Amber,
+            modifier = Modifier.size(20.dp)
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Usage Access required",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Amber
+            )
+            Text(
+                text = "Enables reliable app blocking. Without it, blocked apps may not be detected.",
+                fontSize = 11.sp,
+                color = TextMuted
+            )
+        }
+        TextButton(onClick = onRequestUsageAccess) {
+            Text("Enable", fontSize = 12.sp, color = Amber, fontWeight = FontWeight.Bold)
         }
     }
 }
