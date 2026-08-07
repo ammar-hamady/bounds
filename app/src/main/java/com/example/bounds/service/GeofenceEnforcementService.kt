@@ -4,11 +4,15 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.bounds.BoundsApplication
@@ -139,6 +143,11 @@ class GeofenceEnforcementService : Service() {
             )
         }
 
+        // Haptic: double pulse to signal enforcement start
+        if ((applicationContext as BoundsApplication).hapticFeedbackEnabled) {
+            vibrate(longArrayOf(0, 100, 50, 100))
+        }
+
         blockingStartedAtMs = System.currentTimeMillis()
         isActivelyBlocking  = true
 
@@ -190,6 +199,11 @@ class GeofenceEnforcementService : Service() {
             }
         }
 
+        // Haptic: single short pulse to signal zone clear
+        if (app.hapticFeedbackEnabled) {
+            vibrate(longArrayOf(0, 80))
+        }
+
         app.setEnforcement(null)
         isActivelyBlocking   = false
         currentZoneId        = null
@@ -200,6 +214,31 @@ class GeofenceEnforcementService : Service() {
         @Suppress("DEPRECATION")
         stopForeground(true)
         stopSelf()
+    }
+
+    // ── Vibration helper ──────────────────────────────────────────────────────
+
+    /**
+     * Vibrates with the given pattern (format: [delay, on, off, on, …]).
+     * Uses VibrationEffect on API 26+ and falls back to the deprecated API below.
+     */
+    @Suppress("DEPRECATION")
+    private fun vibrate(pattern: LongArray) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val manager = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+                val vibrator = manager.defaultVibrator
+                vibrator.vibrate(VibrationEffect.createWaveform(pattern, -1))
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+                vibrator.vibrate(VibrationEffect.createWaveform(pattern, -1))
+            } else {
+                val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+                vibrator.vibrate(pattern, -1)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Vibration failed: ${e.message}")
+        }
     }
 
     // ── Time-window helper ────────────────────────────────────────────────────

@@ -39,6 +39,9 @@ class BoundsApplication : Application() {
     /** Grace-timer preference kept in sync from Settings. */
     @Volatile var graceTimerSeconds: Int = 0
 
+    /** Haptic feedback toggle kept in sync from Settings. */
+    @Volatile var hapticFeedbackEnabled: Boolean = true
+
     override fun onCreate() {
         super.onCreate()
         zoneRepository = ZoneRepository(this)

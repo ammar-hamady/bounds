@@ -27,6 +27,8 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Vibration
+import androidx.compose.material3.Switch
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Send
@@ -77,6 +79,8 @@ fun SettingsScreen(
     onThemeChange: (ThemePreference) -> Unit,
     graceTimerSeconds: Int,
     onGraceTimerChange: (Int) -> Unit,
+    hapticFeedbackEnabled: Boolean,
+    onHapticFeedbackChange: (Boolean) -> Unit,
     onDeleteAnalyticsData: () -> Unit,
     onBack: () -> Unit,
     hasUsageStatsPermission: Boolean = true,
@@ -193,6 +197,40 @@ fun SettingsScreen(
                         Text("Off", fontSize = 10.sp, color = TextSubtle)
                         Text("60s", fontSize = 10.sp, color = TextSubtle)
                     }
+                }
+                SettingsDivider()
+                // Haptic feedback toggle
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 13.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(BgElevated),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Vibration,
+                            contentDescription = null,
+                            tint = TextMuted,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    Text(
+                        text = "Haptic feedback",
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Switch(
+                        checked = hapticFeedbackEnabled,
+                        onCheckedChange = onHapticFeedbackChange
+                    )
                 }
                 SettingsDivider()
                 SettingsRow(

@@ -93,8 +93,10 @@ fun BoundsApp() {
     // Default to DARK so the app always opens in dark mode
     var themePreference by rememberSaveable { mutableStateOf(ThemePreference.DARK) }
     var graceTimerSeconds by rememberSaveable { mutableStateOf(0) }
+    var hapticFeedbackEnabled by rememberSaveable { mutableStateOf(true) }
 
     LaunchedEffect(graceTimerSeconds) { app.graceTimerSeconds = graceTimerSeconds }
+    LaunchedEffect(hapticFeedbackEnabled) { app.hapticFeedbackEnabled = hapticFeedbackEnabled }
 
     // ── Usage Access permission ───────────────────────────────────────────────
     var hasUsageStatsPermission by remember {
@@ -197,6 +199,8 @@ fun BoundsApp() {
                         onThemeChange            = { themePreference = it },
                         graceTimerSeconds        = graceTimerSeconds,
                         onGraceTimerChange       = { graceTimerSeconds = it },
+                        hapticFeedbackEnabled    = hapticFeedbackEnabled,
+                        onHapticFeedbackChange   = { hapticFeedbackEnabled = it },
                         onDeleteAnalyticsData    = { boundsViewModel.clearEvents() },
                         onBack                   = { showSettingsScreen = false },
                         hasUsageStatsPermission  = hasUsageStatsPermission,
