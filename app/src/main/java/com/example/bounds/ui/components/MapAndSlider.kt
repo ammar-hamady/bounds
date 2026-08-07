@@ -1,8 +1,11 @@
 package com.example.bounds.ui.components
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Geocoder
+import android.net.Uri
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -20,6 +23,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
@@ -31,7 +35,9 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,6 +46,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -69,6 +78,7 @@ fun MapLocationPicker(
     var suggestions by remember { mutableStateOf<List<LocationSuggestion>>(emptyList()) }
     var showSuggestions by remember { mutableStateOf(false) }
     var locationPermissionGranted by remember { mutableStateOf(false) }
+    var showPermissionDeniedBanner by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     // Helper: check whether either location permission is currently held
@@ -87,25 +97,46 @@ fun MapLocationPicker(
     ) { permissions ->
         locationPermissionGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
             permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
-        // If permission was just granted, immediately snap to current location
         if (locationPermissionGranted) {
+            // Permission just granted — hide any previous denial banner and snap to location
+            showPermissionDeniedBanner = false
             val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
             try {
                 fusedLocationClient.lastLocation.addOnSuccessListener { location ->
                     if (location != null) {
                         currentLat = location.latitude
                         currentLng = location.longitude
+                        searchQuery = "Current Location"
                     }
                 }
             } catch (e: SecurityException) {
                 // Granted but immediately revoked — ignore
             }
+        } else {
+            // Permission denied (first time or "Don't ask again") — show guidance banner
+            showPermissionDeniedBanner = true
         }
     }
 
     // Check permission on composition
     LaunchedEffect(Unit) {
         checkPermission()
+    }
+
+    // Re-check permission whenever the activity resumes (e.g. returning from Settings)
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                checkPermission()
+                // If permission was granted via Settings, dismiss the denial banner
+                if (locationPermissionGranted) {
+                    showPermissionDeniedBanner = false
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     val selectedLocation = LatLng(currentLat, currentLng)
@@ -270,6 +301,49 @@ fun MapLocationPicker(
                 if (locationPermissionGranted) "Return to Current Location"
                 else "Enable Location & Use Current"
             )
+        }
+
+        // Permission denied banner — shown after user denies the system dialog
+        if (showPermissionDeniedBanner && !locationPermissionGranted) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onErrorContainer
+                )
+                Text(
+                    text = "Location access is required to use your current position. Please enable it in Settings.",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(
+                    onClick = {
+                        val intent = Intent(
+                            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            Uri.fromParts("package", context.packageName, null)
+                        )
+                        context.startActivity(intent)
+                    }
+                ) {
+                    Text(
+                        text = "Settings",
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(12.dp))
