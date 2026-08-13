@@ -96,23 +96,99 @@ function getPreviewExamplePath(): string {
   return `${basePath}/preview/ComponentName`;
 }
 
+type PreviewEntry = {
+  componentPath: string;
+  name: string;
+  group: string;
+};
+
+function getPreviewEntries(): PreviewEntry[] {
+  return Object.keys(discoveredModules)
+    .map((moduleKey) => {
+      const componentPath = moduleKey
+        .replace(/^\.\/components\/mockups\//, '')
+        .replace(/\.tsx$/, '');
+      const parts = componentPath.split('/');
+      const name = parts.pop() ?? componentPath;
+
+      return {
+        componentPath,
+        name,
+        group: parts.join(' / ') || 'Components',
+      };
+    })
+    .sort((a, b) =>
+      `${a.group}/${a.name}`.localeCompare(`${b.group}/${b.name}`),
+    );
+}
+
 function Gallery() {
+  const basePath = getBasePath();
+  const previews = getPreviewEntries();
+  const groups = previews.reduce<Record<string, PreviewEntry[]>>(
+    (result, preview) => {
+      (result[preview.group] ??= []).push(preview);
+      return result;
+    },
+    {},
+  );
+
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-8">
-      <div className="text-center max-w-md">
-        <h1 className="text-2xl font-semibold text-gray-900 mb-3">
-          Component Preview Server
-        </h1>
-        <p className="text-gray-500 mb-4">
-          This server renders individual components for the workspace canvas.
-        </p>
-        <p className="text-sm text-gray-400">
-          Access component previews at{' '}
-          <code className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">
-            {getPreviewExamplePath()}
-          </code>
-        </p>
-      </div>
+    <div className="min-h-screen bg-slate-950 px-6 py-12 text-slate-100">
+      <main className="mx-auto max-w-4xl">
+        <div className="mb-10">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-amber-400">
+            Bounds UI
+          </p>
+          <h1 className="text-3xl font-semibold tracking-tight">
+            Component Preview Server
+          </h1>
+          <p className="mt-3 max-w-xl text-sm leading-6 text-slate-400">
+            Open a component below to view it in the browser. These previews
+            are generated automatically from the mockup component registry.
+          </p>
+        </div>
+
+        {Object.entries(groups).map(([group, groupPreviews]) => (
+          <section key={group} className="mb-8">
+            <h2 className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+              {group}
+            </h2>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {groupPreviews.map((preview) => (
+                <a
+                  key={preview.componentPath}
+                  href={`${basePath}/preview/${preview.componentPath}`}
+                  className="group rounded-xl border border-slate-800 bg-slate-900/80 p-5 transition-colors hover:border-amber-400/60 hover:bg-slate-900"
+                >
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <h3 className="font-medium text-slate-100 transition-colors group-hover:text-amber-300">
+                        {preview.name}
+                      </h3>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {preview.componentPath}
+                      </p>
+                    </div>
+                    <span
+                      aria-hidden="true"
+                      className="text-lg text-slate-600 transition-colors group-hover:text-amber-400"
+                    >
+                      →
+                    </span>
+                  </div>
+                </a>
+              ))}
+            </div>
+          </section>
+        ))}
+
+        {previews.length === 0 && (
+          <p className="rounded-xl border border-dashed border-slate-800 p-8 text-sm text-slate-500">
+            No preview components have been discovered yet.
+          </p>
+        )}
+      </main>
     </div>
   );
 }
