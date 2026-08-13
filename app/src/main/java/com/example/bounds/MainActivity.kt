@@ -89,10 +89,9 @@ fun BoundsApp() {
     val zones by boundsViewModel.zones.collectAsState()
     val analyticsEvents by boundsViewModel.analyticsEvents.collectAsState()
 
-    // ── App-wide settings ─────────────────────────────────────────────────────
-    // Default to DARK so the app always opens in dark mode
-    var themePreference by rememberSaveable { mutableStateOf(ThemePreference.DARK) }
-    var graceTimerSeconds by rememberSaveable { mutableStateOf(0) }
+    // ── App-wide settings (persisted via DataStore through ViewModel) ─────────
+    val themePreference by boundsViewModel.themePreference.collectAsState()
+    val graceTimerSeconds by boundsViewModel.graceTimerSeconds.collectAsState()
     var hapticFeedbackEnabled by rememberSaveable { mutableStateOf(true) }
 
     LaunchedEffect(graceTimerSeconds) { app.graceTimerSeconds = graceTimerSeconds }
@@ -196,9 +195,9 @@ fun BoundsApp() {
                 NavLayer.SETTINGS -> {
                     SettingsScreen(
                         themePreference          = themePreference,
-                        onThemeChange            = { themePreference = it },
+                        onThemeChange            = { boundsViewModel.saveThemePreference(it) },
                         graceTimerSeconds        = graceTimerSeconds,
-                        onGraceTimerChange       = { graceTimerSeconds = it },
+                        onGraceTimerChange       = { boundsViewModel.saveGraceTimerSeconds(it) },
                         hapticFeedbackEnabled    = hapticFeedbackEnabled,
                         onHapticFeedbackChange   = { hapticFeedbackEnabled = it },
                         onDeleteAnalyticsData    = { boundsViewModel.clearEvents() },

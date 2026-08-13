@@ -2,6 +2,7 @@ package com.example.bounds
 
 import android.app.Application
 import com.example.bounds.data.AnalyticsRepository
+import com.example.bounds.data.SettingsRepository
 import com.example.bounds.data.ZoneRepository
 import com.example.bounds.model.ActiveEnforcementInfo
 import com.example.bounds.model.AnalyticsEvent
@@ -20,6 +21,8 @@ class BoundsApplication : Application() {
     lateinit var zoneRepository: ZoneRepository
         private set
     lateinit var analyticsRepository: AnalyticsRepository
+        private set
+    lateinit var settingsRepository: SettingsRepository
         private set
 
     // ── Active zone enforcement ───────────────────────────────────────────────
@@ -46,6 +49,7 @@ class BoundsApplication : Application() {
         super.onCreate()
         zoneRepository = ZoneRepository(this)
         analyticsRepository = AnalyticsRepository(this)
+        settingsRepository = SettingsRepository(this)
     }
 
     fun setEnforcement(info: ActiveEnforcementInfo?) { _activeEnforcement.value = info }
