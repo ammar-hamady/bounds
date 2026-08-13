@@ -91,6 +91,16 @@ class GeofenceEnforcementService : Service() {
         val startTime = intent.getStringExtra(EXTRA_START_TIME) ?: "00:00"
         val endTime   = intent.getStringExtra(EXTRA_END_TIME)   ?: "23:59"
 
+        // Idempotency guard: Android's INITIAL_TRIGGER_ENTER re-fires enter events for
+        // every geofence the device is already inside after a reboot re-registration.
+        // If this zone is already being tracked (grace period or active blocking) there
+        // is nothing to do — silently drop the duplicate to prevent stacking multiple
+        // overlapping enforcement sessions for the same zone.
+        if (zoneId == currentZoneId) {
+            Log.d(TAG, "Duplicate ENTER for already-tracked zone '$zoneName' — ignoring")
+            return
+        }
+
         // Respect time-sensitive window
         if (timeSensitive && !isWithinTimeWindow(startTime, endTime)) {
             Log.d(TAG, "Zone '$zoneName' is time-sensitive but outside window — skipping")
