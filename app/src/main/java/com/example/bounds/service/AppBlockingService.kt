@@ -46,8 +46,21 @@ class AppBlockingService : Service() {
     private var zoneName: String = ""
     private var endTimeMillis: Long = 0L
 
-    /** Package currently shown in the overlay so we don't re-launch it each tick. */
-    private var overlayShownForPackage: String? = null
+    /**
+     * Set of packages whose overlay is currently active on screen.
+     * Using a Set lets us track multiple blocked apps independently so
+     * switching between two blocked apps doesn't cause stacking or missed
+     * overlay launches.
+     */
+    private val overlayActiveFor: MutableSet<String> = mutableSetOf()
+
+    /**
+     * Per-package timestamp (millis) of the last time we launched the overlay.
+     * A new launch is suppressed for [OVERLAY_COOLDOWN_MS] after the previous one
+     * to prevent rapid re-firing when the polling loop ticks faster than the
+     * Activity transition completes.
+     */
+    private val overlayLastShown: MutableMap<String, Long> = mutableMapOf()
 
     /** Per-package bypass expiry timestamps (millis). */
     private val bypassExpiry: MutableMap<String, Long> = mutableMapOf()
@@ -64,8 +77,10 @@ class AppBlockingService : Service() {
         const val ACTION_BYPASS_ONCE    = "com.example.bounds.ACTION_BYPASS_ONCE"
         const val EXTRA_BYPASS_PACKAGE  = "bypass_package"
 
-        private const val BYPASS_DURATION_MS = 5 * 60_000L   // 5 minutes
-        private const val POLL_INTERVAL_MS   = 500L
+        private const val BYPASS_DURATION_MS  = 5 * 60_000L   // 5 minutes
+        private const val POLL_INTERVAL_MS    = 500L
+        /** Minimum gap between two overlay launches for the same package. */
+        private const val OVERLAY_COOLDOWN_MS = 3_000L        // 3 seconds
     }
 
     override fun onCreate() {
@@ -84,8 +99,9 @@ class AppBlockingService : Service() {
             if (pkg != null) {
                 bypassExpiry[pkg] = System.currentTimeMillis() + BYPASS_DURATION_MS
                 Log.i(TAG, "Bypass granted for $pkg (5 min)")
-                // Clear overlay tracking so it can re-show after the bypass window
-                if (overlayShownForPackage == pkg) overlayShownForPackage = null
+                // Remove from active-overlay set so it can re-show after the bypass window
+                overlayActiveFor.remove(pkg)
+                overlayLastShown.remove(pkg)
             }
             return START_STICKY
         }
@@ -130,36 +146,56 @@ class AppBlockingService : Service() {
 
     /**
      * Main enforcement tick: if a blocked (non-bypassed) app is in the foreground,
-     * show the overlay explanation. Otherwise clear the overlay-shown tracker so it
-     * can re-fire if the same app is opened again later.
+     * show the overlay explanation. Each package is tracked independently in
+     * [overlayActiveFor] so switching between two blocked apps never causes the
+     * overlay to stack or be skipped.
+     *
+     * A short [OVERLAY_COOLDOWN_MS] guard per package prevents rapid re-launches
+     * while the Activity transition is still completing.
+     *
+     * Packages that are no longer in the foreground are removed from [overlayActiveFor]
+     * so the overlay fires again the next time the user opens them.
      */
     private fun enforceBlocking() {
         val foreground = getForegroundPackage()
+        val now = System.currentTimeMillis()
 
         val blockedForeground = foreground?.let { fg ->
             blockedPackages.firstOrNull { pkg -> pkg == fg }
         }
 
         if (blockedForeground != null) {
-            val now = System.currentTimeMillis()
             val bypassUntil = bypassExpiry[blockedForeground] ?: 0L
             if (now < bypassUntil) {
-                // Within bypass window — do not interrupt
-                if (overlayShownForPackage == blockedForeground) overlayShownForPackage = null
+                // Within bypass window — treat as if not blocked; clear active flag
+                overlayActiveFor.remove(blockedForeground)
                 return
             }
-            // Show overlay only once per foreground session for this package
-            if (overlayShownForPackage != blockedForeground) {
-                overlayShownForPackage = blockedForeground
+
+            // Only launch overlay if:
+            //  (a) we haven't already shown it for this package (it's still on screen), AND
+            //  (b) the per-package cooldown has elapsed (guards against transition flicker)
+            val lastShown = overlayLastShown[blockedForeground] ?: 0L
+            if (blockedForeground !in overlayActiveFor &&
+                (now - lastShown) >= OVERLAY_COOLDOWN_MS
+            ) {
+                overlayActiveFor.add(blockedForeground)
+                overlayLastShown[blockedForeground] = now
                 showBlockedOverlay(blockedForeground)
+                Log.d(TAG, "overlayActiveFor=$overlayActiveFor")
             }
         } else {
-            // Blocked app is no longer in foreground — reset so overlay fires again next time
-            if (overlayShownForPackage != null && overlayShownForPackage !in (blockedPackages)) {
-                overlayShownForPackage = null
-            } else if (foreground != null && overlayShownForPackage != null &&
-                foreground != overlayShownForPackage) {
-                overlayShownForPackage = null
+            // The currently-foreground app is not blocked (or unknown).
+            // Remove any package from the active set that is no longer in the foreground
+            // so the overlay will fire again the next time the user opens it.
+            if (foreground != null) {
+                // Only clear the package that just left the foreground, not everything.
+                // We identify it as whichever active packages are NOT the current foreground.
+                val departed = overlayActiveFor.filter { it != foreground }
+                if (departed.isNotEmpty()) {
+                    overlayActiveFor.removeAll(departed.toSet())
+                    Log.d(TAG, "Cleared overlay tracking for departed: $departed")
+                }
             }
         }
     }
