@@ -293,30 +293,6 @@ fun SettingsScreen(
                 )
             }
 
-            // ── ACCOUNT ───────────────────────────────────────────────────────
-            SettingsGroup(label = "ACCOUNT") {
-                SettingsRow(icon = Icons.Filled.Person,   label = "Profile",        soon = true)
-                SettingsDivider()
-                SettingsRow(icon = Icons.Filled.Cloud,    label = "Sync & backup",  value = "Off", soon = true)
-                SettingsDivider()
-                SettingsRow(icon = Icons.Filled.Lock,     label = "Passcode lock",  value = "Off", soon = true)
-            }
-
-            // ── ABOUT ─────────────────────────────────────────────────────────
-            SettingsGroup(label = "ABOUT") {
-                SettingsRow(
-                    icon = Icons.Filled.Info,
-                    label = "App version",
-                    value = "0.1.0-beta",
-                    soon = false,
-                    showArrow = true
-                )
-                SettingsDivider()
-                SettingsRow(icon = Icons.Filled.Language, label = "Privacy policy", soon = true)
-                SettingsDivider()
-                SettingsRow(icon = Icons.Filled.Send,     label = "Send feedback",  soon = true)
-            }
-
             // ── DATA ──────────────────────────────────────────────────────────
             SettingsGroup(label = "DATA") {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
