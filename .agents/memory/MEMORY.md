@@ -1,0 +1,1 @@
+- [Foreground app detection](foreground-app-detection.md) — use recent foreground events, not the most recently used package statistic, to avoid stale self-blocking.
