@@ -6,6 +6,7 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -160,6 +161,18 @@ class AppBlockingService : Service() {
         val foreground = getForegroundPackage()
         val now = System.currentTimeMillis()
 
+        // Bounds must never block or overlay itself. This also protects against
+        // stale usage data briefly reporting a previously opened app while the
+        // Bounds screen is still in the foreground.
+        if (foreground == packageName) {
+            val departed = overlayActiveFor.toSet()
+            overlayActiveFor.clear()
+            if (departed.isNotEmpty()) {
+                Log.d(TAG, "Cleared overlay tracking while Bounds is foreground: $departed")
+            }
+            return
+        }
+
         val blockedForeground = foreground?.let { fg ->
             blockedPackages.firstOrNull { pkg -> pkg == fg }
         }
@@ -211,14 +224,28 @@ class AppBlockingService : Service() {
             try {
                 val usm = getSystemService(USAGE_STATS_SERVICE) as UsageStatsManager
                 val now = System.currentTimeMillis()
-                val stats = usm.queryUsageStats(
-                    UsageStatsManager.INTERVAL_DAILY,
-                    now - 10_000L,
-                    now
-                )
-                val topStat = stats?.filter { it.lastTimeUsed > 0 }
-                    ?.maxByOrNull { it.lastTimeUsed }
-                if (topStat != null) return topStat.packageName
+                val events = usm.queryEvents(now - 5_000L, now)
+                val event = UsageEvents.Event()
+                var latestPackage: String? = null
+                var latestTimestamp = 0L
+
+                while (events.hasNextEvent()) {
+                    events.getNextEvent(event)
+                    val isForegroundEvent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        event.eventType == UsageEvents.Event.ACTIVITY_RESUMED ||
+                            event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND
+                    } else {
+                        @Suppress("DEPRECATION")
+                        event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND
+                    }
+
+                    if (isForegroundEvent && event.timeStamp >= latestTimestamp) {
+                        latestTimestamp = event.timeStamp
+                        latestPackage = event.packageName
+                    }
+                }
+
+                if (latestPackage != null) return latestPackage
             } catch (e: Exception) {
                 Log.w(TAG, "UsageStatsManager failed: ${e.message}")
             }
