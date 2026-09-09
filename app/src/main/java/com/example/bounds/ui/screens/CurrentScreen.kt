@@ -44,9 +44,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -76,20 +73,22 @@ private enum class LockState { IDLE, GRACE, LOCKED }
 @Composable
 fun CurrentScreen(
     activeEnforcement: ActiveEnforcementInfo? = null,
+    manualIsLocked: Boolean = false,
+    manualStatusMsg: String = "",
     hasFineLocation: Boolean = false,
     hasBackgroundLocation: Boolean = true,
     hasUsageStatsPermission: Boolean = true,
     onRequestFineLocation: () -> Unit = {},
     onRequestBackgroundLocation: () -> Unit = {},
     onRequestUsageAccess: () -> Unit = {},
+    onManualLockChange: (Boolean) -> Unit = {},
+    onManualStatusChange: (String) -> Unit = {},
     zones: List<Zone> = emptyList(),
     onSimulateEntry: (Zone) -> Unit = {},
     onManualBlockingStarted: (appName: String, durationMinutes: Int) -> Unit = { _, _ -> },
     graceTimerSeconds: Int = 0,
     modifier: Modifier = Modifier
 ) {
-    var manualIsLocked by remember { mutableStateOf(false) }
-    var manualStatusMsg by remember { mutableStateOf("") }
     val context = LocalContext.current
 
     // ── Derived state ─────────────────────────────────────────────────────────
@@ -356,20 +355,20 @@ fun CurrentScreen(
             onClick = {
                 if (manualIsLocked || isEnforcingZone) {
                     AppBlockingManager.stopAllBlocking(context)
-                    manualStatusMsg = ""
-                    manualIsLocked  = false
+                    onManualStatusChange("")
+                    onManualLockChange(false)
                 } else if (!hasUsageStatsPermission) {
-                    manualStatusMsg = "Usage Access is required to block Instagram"
+                    onManualStatusChange("Usage Access is required to block Instagram")
                     onRequestUsageAccess()
                 } else {
                     val duration = graceTimerSeconds.coerceAtLeast(5)
                     val ok = AppBlockingManager.startBlockingApp(context, durationMinutes = duration)
                     if (ok) {
-                        manualStatusMsg = "✅ Instagram locked for $duration minutes"
-                        manualIsLocked  = true
+                        onManualStatusChange("✅ Instagram locked for $duration minutes")
+                        onManualLockChange(true)
                         onManualBlockingStarted("Instagram", duration)
                     } else {
-                        manualStatusMsg = "❌ Instagram not installed"
+                        onManualStatusChange("❌ Instagram not installed")
                     }
                 }
             },

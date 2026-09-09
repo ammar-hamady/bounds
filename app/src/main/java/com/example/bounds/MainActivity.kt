@@ -93,6 +93,10 @@ fun BoundsApp() {
     val themePreference by boundsViewModel.themePreference.collectAsState()
     val graceTimerSeconds by boundsViewModel.graceTimerSeconds.collectAsState()
     var hapticFeedbackEnabled by rememberSaveable { mutableStateOf(true) }
+    // CurrentScreen is disposed when the user changes tabs. Keep manual lock
+    // state above the tab content so returning to Current does not reset it.
+    var manualIsLocked by rememberSaveable { mutableStateOf(false) }
+    var manualStatusMsg by rememberSaveable { mutableStateOf("") }
 
     LaunchedEffect(graceTimerSeconds) { app.graceTimerSeconds = graceTimerSeconds }
     LaunchedEffect(hapticFeedbackEnabled) { app.hapticFeedbackEnabled = hapticFeedbackEnabled }
@@ -308,6 +312,8 @@ fun BoundsApp() {
                                     AppDestinations.CURRENT -> {
                                         CurrentScreen(
                                             activeEnforcement           = activeEnforcement,
+                                            manualIsLocked              = manualIsLocked,
+                                            manualStatusMsg             = manualStatusMsg,
                                             hasFineLocation             = hasFineLocation,
                                             hasBackgroundLocation       = hasBackgroundLocation,
                                             hasUsageStatsPermission     = hasUsageStatsPermission,
@@ -334,6 +340,8 @@ fun BoundsApp() {
                                                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                                 )
                                             },
+                                             onManualLockChange          = { manualIsLocked = it },
+                                             onManualStatusChange        = { manualStatusMsg = it },
                                             onSimulateEntry             = { zone ->
                                                 val intent = Intent(context, GeofenceEnforcementService::class.java).apply {
                                                     action = GeofenceEnforcementService.ACTION_ZONE_ENTER
