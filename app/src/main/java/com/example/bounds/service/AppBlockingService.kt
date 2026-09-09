@@ -1,6 +1,5 @@
 package com.example.bounds.service
 
-import android.app.ActivityManager
 import android.app.AppOpsManager
 import android.app.Notification
 import android.app.NotificationChannel
@@ -27,7 +26,7 @@ private const val TAG = "AppBlockingService"
  *
  * Strategy:
  *  1. Every 500 ms it checks which app is currently in the foreground via
- *     [UsageStatsManager] (falls back to [ActivityManager.runningAppProcesses]).
+ *     recent [UsageEvents] from [UsageStatsManager].
  *  2. If a blocked app is detected in the foreground AND no overlay is already
  *     showing for it, it launches [BlockedOverlayActivity] so the user sees a
  *     clear explanation instead of a silent crash.
@@ -39,7 +38,6 @@ private const val TAG = "AppBlockingService"
 class AppBlockingService : Service() {
 
     private lateinit var notificationManager: NotificationManager
-    private lateinit var activityManager: ActivityManager
     private val handler = Handler(Looper.getMainLooper())
     private var blockingRunnable: Runnable? = null
 
@@ -87,7 +85,6 @@ class AppBlockingService : Service() {
     override fun onCreate() {
         super.onCreate()
         notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        activityManager     = getSystemService(ACTIVITY_SERVICE) as ActivityManager
         createNotificationChannel()
     }
 
@@ -216,49 +213,47 @@ class AppBlockingService : Service() {
     /**
      * Returns the package name of the app currently in the foreground, or null.
      *
-     * Prefers [UsageStatsManager] (accurate on API 21+, requires PACKAGE_USAGE_STATS).
-     * Falls back to [ActivityManager.runningAppProcesses] on older/restricted devices.
+     * Uses recent [UsageEvents] transitions (requires PACKAGE_USAGE_STATS).
+     * There is intentionally no process-list fallback: modern Android does not
+     * guarantee that running-process importance identifies the visible app.
      */
     private fun getForegroundPackage(): String? {
-        if (hasUsageStatsPermission()) {
-            try {
-                val usm = getSystemService(USAGE_STATS_SERVICE) as UsageStatsManager
-                val now = System.currentTimeMillis()
-                val events = usm.queryEvents(now - 5_000L, now)
-                val event = UsageEvents.Event()
-                var latestPackage: String? = null
-                var latestTimestamp = 0L
+        if (!hasUsageStatsPermission()) {
+            // The running-process fallback cannot reliably identify the visible
+            // app on modern Android and can silently make blocking ineffective.
+            return null
+        }
 
-                while (events.hasNextEvent()) {
-                    events.getNextEvent(event)
-                    val isForegroundEvent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        event.eventType == UsageEvents.Event.ACTIVITY_RESUMED ||
-                            event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND
-                    } else {
-                        @Suppress("DEPRECATION")
+        try {
+            val usm = getSystemService(USAGE_STATS_SERVICE) as UsageStatsManager
+            val now = System.currentTimeMillis()
+            val events = usm.queryEvents(now - 5_000L, now)
+            val event = UsageEvents.Event()
+            var latestPackage: String? = null
+            var latestTimestamp = 0L
+
+            while (events.hasNextEvent()) {
+                events.getNextEvent(event)
+                val isForegroundEvent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    event.eventType == UsageEvents.Event.ACTIVITY_RESUMED ||
                         event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND
-                    }
-
-                    if (isForegroundEvent && event.timeStamp >= latestTimestamp) {
-                        latestTimestamp = event.timeStamp
-                        latestPackage = event.packageName
-                    }
+                } else {
+                    @Suppress("DEPRECATION")
+                    event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND
                 }
 
-                if (latestPackage != null) return latestPackage
-            } catch (e: Exception) {
-                Log.w(TAG, "UsageStatsManager failed: ${e.message}")
+                if (isForegroundEvent && event.timeStamp >= latestTimestamp) {
+                    latestTimestamp = event.timeStamp
+                    latestPackage = event.packageName
+                }
             }
+
+            if (latestPackage != null) return latestPackage
+        } catch (e: Exception) {
+            Log.w(TAG, "UsageStatsManager failed: ${e.message}")
         }
 
-        // Fallback: scan running processes (less reliable for foreground detection)
-        return try {
-            activityManager.runningAppProcesses
-                ?.firstOrNull { it.importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND }
-                ?.processName
-        } catch (e: Exception) {
-            null
-        }
+        return null
     }
 
     /** Checks whether the app has been granted the PACKAGE_USAGE_STATS special permission. */

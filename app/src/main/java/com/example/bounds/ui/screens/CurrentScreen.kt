@@ -358,6 +358,9 @@ fun CurrentScreen(
                     AppBlockingManager.stopAllBlocking(context)
                     manualStatusMsg = ""
                     manualIsLocked  = false
+                } else if (!hasUsageStatsPermission) {
+                    manualStatusMsg = "Usage Access is required to block Instagram"
+                    onRequestUsageAccess()
                 } else {
                     val duration = graceTimerSeconds.coerceAtLeast(5)
                     val ok = AppBlockingManager.startBlockingApp(context, durationMinutes = duration)

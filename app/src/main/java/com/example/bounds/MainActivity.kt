@@ -166,7 +166,10 @@ fun BoundsApp() {
         var currentDestination by rememberSaveable { mutableStateOf(AppDestinations.ZONES) }
         var showAddZoneScreen  by rememberSaveable { mutableStateOf(false) }
         var showSettingsScreen by rememberSaveable { mutableStateOf(false) }
-        var editingZone        by rememberSaveable { mutableStateOf<Zone?>(null) }
+        // Save only the ID. Zone itself is not Parcelable/Serializable and
+        // cannot safely be stored in Android's saved-instance-state Bundle.
+        var editingZoneId      by rememberSaveable { mutableStateOf<String?>(null) }
+        val editingZone = editingZoneId?.let { id -> zones.firstOrNull { it.id == id } }
 
         val navLayer = when {
             showSettingsScreen -> NavLayer.SETTINGS
@@ -222,11 +225,11 @@ fun BoundsApp() {
                             }
                             boundsViewModel.saveZones(updatedZones)
                             showAddZoneScreen = false
-                            editingZone = null
+                            editingZoneId = null
                         },
                         onCancel = {
                             showAddZoneScreen = false
-                            editingZone = null
+                            editingZoneId = null
                         },
                         initialZone = editingZone
                     )
@@ -284,7 +287,7 @@ fun BoundsApp() {
                                         HomeScreen(
                                             zones          = zones,
                                             onAddZoneClick = {
-                                                editingZone = null
+                                                editingZoneId = null
                                                 showAddZoneScreen = true
                                             },
                                             onToggleZone   = { id, enabled ->
@@ -293,7 +296,7 @@ fun BoundsApp() {
                                                 )
                                             },
                                             onEditZone     = { zone ->
-                                                editingZone = zone
+                                                editingZoneId = zone.id
                                                 showAddZoneScreen = true
                                             },
                                             onDeleteZone   = { id ->
