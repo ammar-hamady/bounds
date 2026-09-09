@@ -1,1 +1,2 @@
 - [Foreground app detection](foreground-app-detection.md) — use recent foreground events, not the most recently used package statistic, to avoid stale self-blocking.
+- [Reliable Android blocking overlays](android-blocking-overlays.md) — enforce with a service-owned application overlay, not a background Activity launch.

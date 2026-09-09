@@ -78,9 +78,11 @@ fun CurrentScreen(
     hasFineLocation: Boolean = false,
     hasBackgroundLocation: Boolean = true,
     hasUsageStatsPermission: Boolean = true,
+    hasOverlayPermission: Boolean = true,
     onRequestFineLocation: () -> Unit = {},
     onRequestBackgroundLocation: () -> Unit = {},
     onRequestUsageAccess: () -> Unit = {},
+    onRequestOverlayPermission: () -> Unit = {},
     onManualLockChange: (Boolean) -> Unit = {},
     onManualStatusChange: (String) -> Unit = {},
     zones: List<Zone> = emptyList(),
@@ -164,6 +166,14 @@ fun CurrentScreen(
         if (!hasUsageStatsPermission) {
             UsageAccessBanner(
                 onRequestUsageAccess = onRequestUsageAccess,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
+            )
+        }
+        if (!hasOverlayPermission) {
+            OverlayPermissionBanner(
+                onRequestPermission = onRequestOverlayPermission,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 6.dp)
@@ -360,6 +370,9 @@ fun CurrentScreen(
                 } else if (!hasUsageStatsPermission) {
                     onManualStatusChange("Usage Access is required to block Instagram")
                     onRequestUsageAccess()
+                } else if (!hasOverlayPermission) {
+                    onManualStatusChange("Display over other apps is required to show the block screen")
+                    onRequestOverlayPermission()
                 } else {
                     val duration = graceTimerSeconds.coerceAtLeast(5)
                     val ok = AppBlockingManager.startBlockingApp(context, durationMinutes = duration)
@@ -460,6 +473,44 @@ private fun BackgroundLocationBanner(onRequestPermission: () -> Unit, modifier: 
         }
         TextButton(onClick = onRequestPermission) {
             Text("Allow", fontSize = 12.sp, color = Amber, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+private fun OverlayPermissionBanner(
+    onRequestPermission: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .background(AmberDim, RoundedCornerShape(14.dp))
+            .border(1.dp, Amber.copy(alpha = 0.3f), RoundedCornerShape(14.dp))
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Default.VisibilityOff,
+            contentDescription = null,
+            tint = Amber,
+            modifier = Modifier.size(20.dp)
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                "Display over other apps",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Amber
+            )
+            Text(
+                "Required to place the Bounds block screen over Instagram.",
+                fontSize = 11.sp,
+                color = TextMuted
+            )
+        }
+        TextButton(onClick = onRequestPermission) {
+            Text("Enable", fontSize = 12.sp, color = Amber, fontWeight = FontWeight.Bold)
         }
     }
 }

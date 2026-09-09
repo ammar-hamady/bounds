@@ -67,8 +67,8 @@ object AppBlockingManager {
         val pkg = NAME_TO_PACKAGE[appName] ?: return
         if (!isAppInstalled(context, pkg)) return
         isBlocking = true
-        currentBlockedPackages = currentBlockedPackages + pkg
-        launchService(context, listOf(pkg), zoneName, durationMins)
+        currentBlockedPackages = (currentBlockedPackages + pkg).distinct()
+        launchService(context, currentBlockedPackages, zoneName, durationMins)
     }
 
     /**

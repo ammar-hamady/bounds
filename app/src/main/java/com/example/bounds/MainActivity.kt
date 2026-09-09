@@ -2,6 +2,7 @@ package com.example.bounds
 
 import android.Manifest
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -105,6 +106,11 @@ fun BoundsApp() {
     var hasUsageStatsPermission by remember {
         mutableStateOf(PermissionUtils.hasUsageStatsPermission(context))
     }
+    var hasOverlayPermission by remember {
+        mutableStateOf(
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(context)
+        )
+    }
 
     // Recheck whenever the app resumes (user may have just returned from Settings)
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -112,6 +118,8 @@ fun BoundsApp() {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 hasUsageStatsPermission = PermissionUtils.hasUsageStatsPermission(context)
+                hasOverlayPermission =
+                    Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(context)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -317,6 +325,7 @@ fun BoundsApp() {
                                             hasFineLocation             = hasFineLocation,
                                             hasBackgroundLocation       = hasBackgroundLocation,
                                             hasUsageStatsPermission     = hasUsageStatsPermission,
+                                            hasOverlayPermission        = hasOverlayPermission,
                                             graceTimerSeconds           = graceTimerSeconds,
                                             zones                       = zones,
                                             onRequestFineLocation       = {
@@ -339,6 +348,16 @@ fun BoundsApp() {
                                                     Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
                                                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                                 )
+                                            },
+                                            onRequestOverlayPermission  = {
+                                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                                    context.startActivity(
+                                                        Intent(
+                                                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                                            Uri.parse("package:${context.packageName}")
+                                                        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                    )
+                                                }
                                             },
                                              onManualLockChange          = { manualIsLocked = it },
                                              onManualStatusChange        = { manualStatusMsg = it },

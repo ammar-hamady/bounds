@@ -9,17 +9,27 @@ import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Color
+import android.graphics.PixelFormat
+import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.provider.Settings
 import android.util.Log
+import android.view.Gravity
+import android.view.View
+import android.view.WindowManager
+import android.widget.Button
+import android.widget.FrameLayout
+import android.widget.LinearLayout
+import android.widget.TextView
 import androidx.core.app.NotificationCompat
 import com.example.bounds.R
-import com.example.bounds.ui.screens.BlockedOverlayActivity
 
 private const val TAG = "AppBlockingService"
+private val AMBER = Color.rgb(255, 193, 7)
 
 /**
  * Foreground service that enforces app blocking while inside a geofenced zone.
@@ -27,9 +37,9 @@ private const val TAG = "AppBlockingService"
  * Strategy:
  *  1. Every 500 ms it checks which app is currently in the foreground via
  *     recent [UsageEvents] from [UsageStatsManager].
- *  2. If a blocked app is detected in the foreground AND no overlay is already
- *     showing for it, it launches [BlockedOverlayActivity] so the user sees a
- *     clear explanation instead of a silent crash.
+ *  2. If a blocked app is detected in the foreground, it presents a real
+ *     TYPE_APPLICATION_OVERLAY. A normal Activity launch from a background
+ *     service is restricted by modern Android and can be silently ignored.
  *  3. A "bypass once" window (default 5 min) can be granted per-package via
  *     [ACTION_BYPASS_ONCE]; during that window the package is not interrupted.
  *
@@ -38,8 +48,11 @@ private const val TAG = "AppBlockingService"
 class AppBlockingService : Service() {
 
     private lateinit var notificationManager: NotificationManager
+    private lateinit var windowManager: WindowManager
     private val handler = Handler(Looper.getMainLooper())
     private var blockingRunnable: Runnable? = null
+    private var blockingOverlayView: View? = null
+    private var blockingOverlayPackage: String? = null
 
     private var blockedPackages: List<String> = emptyList()
     private var zoneName: String = ""
@@ -72,7 +85,7 @@ class AppBlockingService : Service() {
         const val EXTRA_ZONE_NAME         = "zone_name"
         const val EXTRA_DURATION_MINUTES  = "duration_minutes"
 
-        /** Sent by [BlockedOverlayActivity] to grant a one-time 5-minute bypass. */
+        /** Grants a one-time five-minute bypass for one package. */
         const val ACTION_BYPASS_ONCE    = "com.example.bounds.ACTION_BYPASS_ONCE"
         const val EXTRA_BYPASS_PACKAGE  = "bypass_package"
 
@@ -85,21 +98,18 @@ class AppBlockingService : Service() {
     override fun onCreate() {
         super.onCreate()
         notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         createNotificationChannel()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent == null) return START_STICKY
 
-        // Handle bypass-once request from BlockedOverlayActivity
+        // Handle bypass-once requests from either overlay implementation.
         if (intent.action == ACTION_BYPASS_ONCE) {
             val pkg = intent.getStringExtra(EXTRA_BYPASS_PACKAGE)
             if (pkg != null) {
-                bypassExpiry[pkg] = System.currentTimeMillis() + BYPASS_DURATION_MS
-                Log.i(TAG, "Bypass granted for $pkg (5 min)")
-                // Remove from active-overlay set so it can re-show after the bypass window
-                overlayActiveFor.remove(pkg)
-                overlayLastShown.remove(pkg)
+                grantBypass(pkg)
             }
             return START_STICKY
         }
@@ -127,6 +137,7 @@ class AppBlockingService : Service() {
     // ── Blocking loop ─────────────────────────────────────────────────────────
 
     private fun startBlockingLoop() {
+        blockingRunnable?.let { handler.removeCallbacks(it) }
         blockingRunnable = object : Runnable {
             override fun run() {
                 if (System.currentTimeMillis() >= endTimeMillis) {
@@ -155,6 +166,15 @@ class AppBlockingService : Service() {
      * so the overlay fires again the next time the user opens them.
      */
     private fun enforceBlocking() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            // Android removes application-overlay windows when this permission
+            // is revoked. Clear our bookkeeping too so enforcement can recover
+            // after the user grants it again.
+            overlayActiveFor.clear()
+            hideBlockingOverlay()
+            return
+        }
+
         val foreground = getForegroundPackage()
         val now = System.currentTimeMillis()
 
@@ -164,6 +184,7 @@ class AppBlockingService : Service() {
         if (foreground == packageName) {
             val departed = overlayActiveFor.toSet()
             overlayActiveFor.clear()
+            hideBlockingOverlay()
             if (departed.isNotEmpty()) {
                 Log.d(TAG, "Cleared overlay tracking while Bounds is foreground: $departed")
             }
@@ -179,6 +200,7 @@ class AppBlockingService : Service() {
             if (now < bypassUntil) {
                 // Within bypass window — treat as if not blocked; clear active flag
                 overlayActiveFor.remove(blockedForeground)
+                if (blockingOverlayPackage == blockedForeground) hideBlockingOverlay()
                 return
             }
 
@@ -189,10 +211,11 @@ class AppBlockingService : Service() {
             if (blockedForeground !in overlayActiveFor &&
                 (now - lastShown) >= OVERLAY_COOLDOWN_MS
             ) {
-                overlayActiveFor.add(blockedForeground)
-                overlayLastShown[blockedForeground] = now
-                showBlockedOverlay(blockedForeground)
-                Log.d(TAG, "overlayActiveFor=$overlayActiveFor")
+                if (showBlockedOverlay(blockedForeground)) {
+                    overlayActiveFor.add(blockedForeground)
+                    overlayLastShown[blockedForeground] = now
+                    Log.d(TAG, "overlayActiveFor=$overlayActiveFor")
+                }
             }
         } else {
             // The currently-foreground app is not blocked (or unknown).
@@ -204,6 +227,7 @@ class AppBlockingService : Service() {
                 val departed = overlayActiveFor.filter { it != foreground }
                 if (departed.isNotEmpty()) {
                     overlayActiveFor.removeAll(departed.toSet())
+                    hideBlockingOverlay()
                     Log.d(TAG, "Cleared overlay tracking for departed: $departed")
                 }
             }
@@ -281,25 +305,166 @@ class AppBlockingService : Service() {
         false
     }
 
-    /** Launches [BlockedOverlayActivity] on top of the blocked app. */
-    private fun showBlockedOverlay(blockedPackage: String) {
-        val appLabel = try {
-            val info = packageManager.getApplicationInfo(blockedPackage, 0)
-            packageManager.getApplicationLabel(info).toString()
-        } catch (e: PackageManager.NameNotFoundException) {
-            blockedPackage.substringAfterLast('.')
+    /**
+     * Adds an interactive system overlay above the blocked app. Unlike starting
+     * an Activity from this background service, this remains reliable under
+     * Android's background-activity-launch restrictions.
+     */
+    private fun showBlockedOverlay(blockedPackage: String): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            Log.w(TAG, "Cannot show block screen: overlay permission is not granted")
+            return false
+        }
+        if (blockingOverlayView != null && blockingOverlayPackage == blockedPackage) return true
+
+        hideBlockingOverlay()
+        val view = createBlockingOverlay(blockedPackage)
+        val windowType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+        } else {
+            @Suppress("DEPRECATION")
+            WindowManager.LayoutParams.TYPE_PHONE
+        }
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            windowType,
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.CENTER
         }
 
-        Log.i(TAG, "Showing blocked overlay for $blockedPackage in zone '$zoneName'")
-
-        val overlayIntent = Intent(this, BlockedOverlayActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
-                    Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
-            putExtra(BlockedOverlayActivity.EXTRA_BLOCKED_PACKAGE, blockedPackage)
-            putExtra(BlockedOverlayActivity.EXTRA_BLOCKED_APP_LABEL, appLabel)
-            putExtra(BlockedOverlayActivity.EXTRA_ZONE_NAME, zoneName)
+        return try {
+            windowManager.addView(view, params)
+            blockingOverlayView = view
+            blockingOverlayPackage = blockedPackage
+            Log.i(TAG, "Showing system overlay for $blockedPackage in zone '$zoneName'")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to show blocking overlay", e)
+            false
         }
-        startActivity(overlayIntent)
+    }
+
+    private fun createBlockingOverlay(blockedPackage: String): View {
+        val appName = appLabel(blockedPackage)
+        val contextLabel = zoneName.takeIf { it.isNotBlank() } ?: "Manual Block"
+
+        val root = FrameLayout(this).apply {
+            setBackgroundColor(Color.argb(248, 16, 16, 16))
+            isClickable = true
+        }
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(dp(28), dp(28), dp(28), dp(28))
+            background = roundedBackground(Color.rgb(26, 26, 26), 20f)
+        }
+        val cardParams = FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            Gravity.CENTER
+        ).apply {
+            leftMargin = dp(28)
+            rightMargin = dp(28)
+        }
+
+        card.addView(overlayText("🔒", 48f, Color.WHITE, 0))
+        card.addView(overlayText(appName, 22f, AMBER, dp(12)))
+        card.addView(
+            overlayText(
+                "This app is blocked while Bounds is active",
+                14f,
+                Color.rgb(187, 187, 187),
+                dp(14)
+            )
+        )
+        card.addView(overlayText("📍  $contextLabel", 14f, AMBER, dp(12)))
+
+        val homeButton = Button(this).apply {
+            text = "Go to Home Screen"
+            isAllCaps = false
+            setTextColor(Color.rgb(16, 16, 16))
+            textSize = 15f
+            background = roundedBackground(AMBER, 12f)
+            setOnClickListener {
+                try {
+                    // Keep the overlay attached while starting Home. Android 15
+                    // requires a visible overlay for this background launch.
+                    // The next usage-event tick removes it after Home resumes.
+                    startActivity(Intent(Intent.ACTION_MAIN).apply {
+                        addCategory(Intent.CATEGORY_HOME)
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    })
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to open the Home screen", e)
+                }
+            }
+        }
+        card.addView(homeButton, buttonLayoutParams(dp(20)))
+
+        val bypassButton = Button(this).apply {
+            text = "Let me in once (5 min)"
+            isAllCaps = false
+            setTextColor(Color.LTGRAY)
+            textSize = 14f
+            background = roundedBackground(Color.rgb(45, 45, 45), 12f)
+            setOnClickListener { grantBypass(blockedPackage) }
+        }
+        card.addView(bypassButton, buttonLayoutParams(dp(10)))
+        root.addView(card, cardParams)
+        return root
+    }
+
+    private fun overlayText(textValue: String, sizeSp: Float, color: Int, topMargin: Int): TextView =
+        TextView(this).apply {
+            text = textValue
+            textSize = sizeSp
+            setTextColor(color)
+            gravity = Gravity.CENTER
+            val params = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            params.topMargin = topMargin
+            layoutParams = params
+        }
+
+    private fun buttonLayoutParams(topMargin: Int): LinearLayout.LayoutParams =
+        LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            dp(52)
+        ).apply { this.topMargin = topMargin }
+
+    private fun roundedBackground(color: Int, radiusDp: Float): GradientDrawable =
+        GradientDrawable().apply {
+            setColor(color)
+            cornerRadius = dp(radiusDp.toInt()).toFloat()
+        }
+
+    private fun dp(value: Int): Int =
+        (value * resources.displayMetrics.density).toInt()
+
+    private fun grantBypass(blockedPackage: String) {
+        bypassExpiry[blockedPackage] = System.currentTimeMillis() + BYPASS_DURATION_MS
+        overlayActiveFor.remove(blockedPackage)
+        overlayLastShown.remove(blockedPackage)
+        hideBlockingOverlay()
+        Log.i(TAG, "Bypass granted for $blockedPackage (5 min)")
+    }
+
+    private fun hideBlockingOverlay() {
+        blockingOverlayView?.let { view ->
+            try {
+                windowManager.removeView(view)
+            } catch (e: IllegalArgumentException) {
+                Log.w(TAG, "Blocking overlay was already removed")
+            }
+        }
+        blockingOverlayView = null
+        blockingOverlayPackage = null
     }
 
     // ── Notification helpers ──────────────────────────────────────────────────
@@ -354,6 +519,7 @@ class AppBlockingService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         blockingRunnable?.let { handler.removeCallbacks(it) }
+        hideBlockingOverlay()
         notificationManager.cancel(NOTIFICATION_ID)
     }
 
