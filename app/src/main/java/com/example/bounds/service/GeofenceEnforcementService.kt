@@ -1,11 +1,13 @@
 package com.example.bounds.service
 
+import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -15,11 +17,17 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.example.bounds.BoundsApplication
 import com.example.bounds.R
 import com.example.bounds.model.ActiveEnforcementInfo
 import com.example.bounds.model.AnalyticsEvent
 import com.example.bounds.util.AppBlockingManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import java.util.UUID
 
 private const val TAG = "GeofenceEnfService"
@@ -48,9 +56,12 @@ class GeofenceEnforcementService : Service() {
 
         private const val CHANNEL_ID        = "bounds_enforcement_channel"
         private const val NOTIFICATION_ID   = 3
+        private const val ENTRY_CHANNEL_ID  = "bounds_zone_entry_alerts"
+        private const val ENTRY_NOTIFICATION_ID = 4
     }
 
     private val handler = Handler(Looper.getMainLooper())
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var graceRunnable: Runnable? = null
 
     private var currentZoneId: String?     = null
@@ -68,8 +79,20 @@ class GeofenceEnforcementService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_ZONE_ENTER -> handleEnter(intent)
-            ACTION_ZONE_EXIT  -> handleExit(intent.getStringExtra(EXTRA_ZONE_ID))
+            ACTION_ZONE_ENTER -> {
+                startForeground(
+                    NOTIFICATION_ID,
+                    buildNotification("Bounds", "Preparing zone protection…")
+                )
+                serviceScope.launch {
+                    (applicationContext as BoundsApplication).awaitSettingsReady()
+                    handleEnter(intent)
+                }
+            }
+            ACTION_ZONE_EXIT -> serviceScope.launch {
+                (applicationContext as BoundsApplication).awaitSettingsReady()
+                handleExit(intent.getStringExtra(EXTRA_ZONE_ID))
+            }
         }
         return START_STICKY
     }
@@ -77,6 +100,7 @@ class GeofenceEnforcementService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         graceRunnable?.let { handler.removeCallbacks(it) }
+        serviceScope.cancel()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -120,6 +144,9 @@ class GeofenceEnforcementService : Service() {
         // Start foreground immediately (required on API 26+)
         val graceLabel = if (graceMs > 0) "Grace period: ${app.graceTimerSeconds}s…" else "Blocking active"
         startForeground(NOTIFICATION_ID, buildNotification("Entering $zoneName", graceLabel))
+        if (app.entryNotificationsEnabled) {
+            postEntryNotification(zoneName, graceMs > 0)
+        }
 
         app.setEnforcement(
             ActiveEnforcementInfo(
@@ -282,7 +309,38 @@ class GeofenceEnforcementService : Service() {
             ).apply { description = "Active geofence enforcement status" }
             getSystemService(NotificationManager::class.java)
                 .createNotificationChannel(channel)
+
+            val entryChannel = NotificationChannel(
+                ENTRY_CHANNEL_ID,
+                "Zone Entry Alerts",
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply { description = "Alerts when Bounds protection activates for a zone" }
+            getSystemService(NotificationManager::class.java)
+                .createNotificationChannel(entryChannel)
         }
+    }
+
+    private fun postEntryNotification(zoneName: String, hasGracePeriod: Boolean) {
+        if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) return
+
+        val text = if (hasGracePeriod) {
+            "Grace period started before app blocking activates."
+        } else {
+            "App blocking is now active."
+        }
+        val notification = NotificationCompat.Builder(this, ENTRY_CHANNEL_ID)
+            .setContentTitle("Entered $zoneName")
+            .setContentText(text)
+            .setSmallIcon(R.drawable.ic_favorite)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .build()
+        getSystemService(NotificationManager::class.java)
+            .notify(ENTRY_NOTIFICATION_ID, notification)
     }
 
     private fun buildNotification(title: String, text: String): Notification =

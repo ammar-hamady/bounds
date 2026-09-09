@@ -2,6 +2,7 @@ package com.example.bounds.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,6 +27,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material3.Switch
@@ -62,6 +64,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.bounds.model.BlockIntensity
 import com.example.bounds.model.ThemePreference
 import com.example.bounds.ui.theme.Amber
 import com.example.bounds.ui.theme.AmberDim
@@ -81,6 +84,11 @@ fun SettingsScreen(
     onGraceTimerChange: (Int) -> Unit,
     hapticFeedbackEnabled: Boolean,
     onHapticFeedbackChange: (Boolean) -> Unit,
+    entryNotificationsEnabled: Boolean,
+    onEntryNotificationsChange: (Boolean) -> Unit,
+    blockIntensity: BlockIntensity,
+    onBlockIntensityChange: (BlockIntensity) -> Unit,
+    onManageAppBlocklist: () -> Unit,
     onDeleteAnalyticsData: () -> Unit,
     onBack: () -> Unit,
     hasUsageStatsPermission: Boolean = true,
@@ -135,12 +143,20 @@ fun SettingsScreen(
 
             // ── PROTECTION ────────────────────────────────────────────────────
             SettingsGroup(label = "PROTECTION") {
-                // Block intensity
-                SettingsRow(
+                SettingsSwitchRow(
                     icon = Icons.Filled.Security,
-                    label = "Block intensity",
-                    value = "Strict",
-                    soon = true
+                    label = "Strict blocking",
+                    description = if (blockIntensity == BlockIntensity.STRICT) {
+                        "Temporary bypass is disabled"
+                    } else {
+                        "Allows a five-minute bypass"
+                    },
+                    checked = blockIntensity == BlockIntensity.STRICT,
+                    onCheckedChange = {
+                        onBlockIntensityChange(
+                            if (it) BlockIntensity.STRICT else BlockIntensity.STANDARD
+                        )
+                    }
                 )
                 SettingsDivider()
                 // Grace period — functional slider embedded
@@ -199,45 +215,20 @@ fun SettingsScreen(
                     }
                 }
                 SettingsDivider()
-                // Haptic feedback toggle
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 13.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(BgElevated),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Vibration,
-                            contentDescription = null,
-                            tint = TextMuted,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                    Text(
-                        text = "Haptic feedback",
-                        fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Switch(
-                        checked = hapticFeedbackEnabled,
-                        onCheckedChange = onHapticFeedbackChange
-                    )
-                }
+                SettingsSwitchRow(
+                    icon = Icons.Filled.Vibration,
+                    label = "Haptic feedback",
+                    description = "Vibrate when protection activates or clears",
+                    checked = hapticFeedbackEnabled,
+                    onCheckedChange = onHapticFeedbackChange
+                )
                 SettingsDivider()
-                SettingsRow(
-                    icon = Icons.Filled.ChevronRight,
+                SettingsSwitchRow(
+                    icon = Icons.Filled.Notifications,
                     label = "Entry notifications",
-                    value = "On",
-                    soon = true
+                    description = "Alert when you enter an active zone",
+                    checked = entryNotificationsEnabled,
+                    onCheckedChange = onEntryNotificationsChange
                 )
             }
 
@@ -281,15 +272,15 @@ fun SettingsScreen(
                 SettingsRow(
                     icon = Icons.Filled.Apps,
                     label = "App blocklist",
-                    value = "3 apps",
-                    soon = true
+                    value = "Managed per zone",
+                    showArrow = true,
+                    onClick = onManageAppBlocklist
                 )
                 SettingsDivider()
                 SettingsRow(
                     icon = Icons.Filled.Language,
                     label = "Website blocklist",
-                    value = "Off",
-                    soon = true
+                    value = "Requires VPN support"
                 )
             }
 
@@ -424,20 +415,47 @@ private fun SettingsDivider() {
 }
 
 @Composable
-private fun SoonBadge() {
-    Box(
+private fun SettingsSwitchRow(
+    icon: ImageVector,
+    label: String,
+    description: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(4.dp))
-            .background(AmberDim)
-            .padding(horizontal = 6.dp, vertical = 2.dp)
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text(
-            text = "SOON",
-            fontSize = 9.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 0.8.sp,
-            color = Amber
-        )
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(BgElevated),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = TextMuted,
+                modifier = Modifier.size(16.dp)
+            )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                fontSize = 14.sp,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = description,
+                fontSize = 11.sp,
+                color = TextMuted
+            )
+        }
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 
@@ -446,12 +464,13 @@ private fun SettingsRow(
     icon: ImageVector,
     label: String,
     value: String = "",
-    soon: Boolean = false,
-    showArrow: Boolean = false
+    showArrow: Boolean = false,
+    onClick: (() -> Unit)? = null
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(horizontal = 16.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -479,7 +498,6 @@ private fun SettingsRow(
         if (value.isNotEmpty()) {
             Text(text = value, fontSize = 13.sp, color = TextMuted)
         }
-        if (soon) SoonBadge()
         if (showArrow) {
             Icon(
                 imageVector = Icons.Filled.ChevronRight,

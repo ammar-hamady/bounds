@@ -26,7 +26,14 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.app.NotificationCompat
+import com.example.bounds.BoundsApplication
 import com.example.bounds.R
+import com.example.bounds.model.BlockIntensity
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 private const val TAG = "AppBlockingService"
 private val AMBER = Color.rgb(255, 193, 7)
@@ -49,6 +56,7 @@ class AppBlockingService : Service() {
 
     private lateinit var notificationManager: NotificationManager
     private lateinit var windowManager: WindowManager
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val handler = Handler(Looper.getMainLooper())
     private var blockingRunnable: Runnable? = null
     private var blockingOverlayView: View? = null
@@ -109,7 +117,16 @@ class AppBlockingService : Service() {
         if (intent.action == ACTION_BYPASS_ONCE) {
             val pkg = intent.getStringExtra(EXTRA_BYPASS_PACKAGE)
             if (pkg != null) {
-                grantBypass(pkg)
+                serviceScope.launch {
+                    val app = applicationContext as BoundsApplication
+                    app.awaitSettingsReady()
+                    if (app.blockIntensity == BlockIntensity.STANDARD) {
+                        grantBypass(pkg)
+                    } else {
+                        bypassExpiry.remove(pkg)
+                        Log.i(TAG, "Bypass rejected because Strict blocking is enabled")
+                    }
+                }
             }
             return START_STICKY
         }
@@ -130,7 +147,10 @@ class AppBlockingService : Service() {
         endTimeMillis = System.currentTimeMillis() + duration * 60_000L
 
         startForeground(NOTIFICATION_ID, buildNotification(duration))
-        startBlockingLoop()
+        serviceScope.launch {
+            (applicationContext as BoundsApplication).awaitSettingsReady()
+            startBlockingLoop()
+        }
         return START_STICKY
     }
 
@@ -166,6 +186,9 @@ class AppBlockingService : Service() {
      * so the overlay fires again the next time the user opens them.
      */
     private fun enforceBlocking() {
+        if ((applicationContext as BoundsApplication).blockIntensity == BlockIntensity.STRICT) {
+            bypassExpiry.clear()
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
             // Android removes application-overlay windows when this permission
             // is revoked. Clear our bookkeeping too so enforcement can recover
@@ -405,15 +428,17 @@ class AppBlockingService : Service() {
         }
         card.addView(homeButton, buttonLayoutParams(dp(20)))
 
-        val bypassButton = Button(this).apply {
-            text = "Let me in once (5 min)"
-            isAllCaps = false
-            setTextColor(Color.LTGRAY)
-            textSize = 14f
-            background = roundedBackground(Color.rgb(45, 45, 45), 12f)
-            setOnClickListener { grantBypass(blockedPackage) }
+        if ((applicationContext as BoundsApplication).blockIntensity == BlockIntensity.STANDARD) {
+            val bypassButton = Button(this).apply {
+                text = "Let me in once (5 min)"
+                isAllCaps = false
+                setTextColor(Color.LTGRAY)
+                textSize = 14f
+                background = roundedBackground(Color.rgb(45, 45, 45), 12f)
+                setOnClickListener { grantBypass(blockedPackage) }
+            }
+            card.addView(bypassButton, buttonLayoutParams(dp(10)))
         }
-        card.addView(bypassButton, buttonLayoutParams(dp(10)))
         root.addView(card, cardParams)
         return root
     }
@@ -519,6 +544,7 @@ class AppBlockingService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         blockingRunnable?.let { handler.removeCallbacks(it) }
+        serviceScope.cancel()
         hideBlockingOverlay()
         notificationManager.cancel(NOTIFICATION_ID)
     }

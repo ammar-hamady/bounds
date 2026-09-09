@@ -10,6 +10,7 @@ import com.example.bounds.data.AnalyticsRepository
 import com.example.bounds.data.SettingsRepository
 import com.example.bounds.data.ZoneRepository
 import com.example.bounds.model.AnalyticsEvent
+import com.example.bounds.model.BlockIntensity
 import com.example.bounds.model.ThemePreference
 import com.example.bounds.model.Zone
 import kotlinx.coroutines.flow.SharingStarted
@@ -36,6 +37,15 @@ class BoundsViewModel(
     val graceTimerSeconds: StateFlow<Int> = settingsRepository.graceTimerSecondsFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, 0)
 
+    val hapticFeedbackEnabled: StateFlow<Boolean> = settingsRepository.hapticFeedbackEnabledFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    val entryNotificationsEnabled: StateFlow<Boolean> = settingsRepository.entryNotificationsEnabledFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    val blockIntensity: StateFlow<BlockIntensity> = settingsRepository.blockIntensityFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, BlockIntensity.STRICT)
+
     fun saveZones(zones: List<Zone>) {
         viewModelScope.launch { zoneRepository.saveZones(zones) }
     }
@@ -56,6 +66,18 @@ class BoundsViewModel(
 
     fun saveGraceTimerSeconds(seconds: Int) {
         viewModelScope.launch { settingsRepository.saveGraceTimerSeconds(seconds) }
+    }
+
+    fun saveHapticFeedbackEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.saveHapticFeedbackEnabled(enabled) }
+    }
+
+    fun saveEntryNotificationsEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.saveEntryNotificationsEnabled(enabled) }
+    }
+
+    fun saveBlockIntensity(intensity: BlockIntensity) {
+        viewModelScope.launch { settingsRepository.saveBlockIntensity(intensity) }
     }
 
     companion object {

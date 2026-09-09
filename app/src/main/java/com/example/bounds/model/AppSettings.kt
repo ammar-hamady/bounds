@@ -5,3 +5,8 @@ enum class ThemePreference(val label: String) {
     LIGHT("Light"),
     DARK("Dark")
 }
+
+enum class BlockIntensity(val label: String) {
+    STANDARD("Standard"),
+    STRICT("Strict")
+}

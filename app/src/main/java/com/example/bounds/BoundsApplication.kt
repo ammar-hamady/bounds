@@ -6,16 +6,26 @@ import com.example.bounds.data.SettingsRepository
 import com.example.bounds.data.ZoneRepository
 import com.example.bounds.model.ActiveEnforcementInfo
 import com.example.bounds.model.AnalyticsEvent
+import com.example.bounds.model.BlockIntensity
 import com.example.bounds.model.Zone
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.launch
 
 /**
  * Application-level singleton that bridges the geofence BroadcastReceiver / Service
  * (which have no access to Compose state) with the UI layer via StateFlow.
  */
 class BoundsApplication : Application() {
+
+    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val settingsReady = CompletableDeferred<Unit>()
 
     // ── Repositories (persistent storage) ────────────────────────────────────
     lateinit var zoneRepository: ZoneRepository
@@ -45,14 +55,50 @@ class BoundsApplication : Application() {
     /** Haptic feedback toggle kept in sync from Settings. */
     @Volatile var hapticFeedbackEnabled: Boolean = true
 
+    /** Whether zone-entry alerts are enabled. */
+    @Volatile var entryNotificationsEnabled: Boolean = false
+
+    /** Strict mode removes the temporary bypass action from blocking overlays. */
+    @Volatile var blockIntensity: BlockIntensity = BlockIntensity.STRICT
+
     override fun onCreate() {
         super.onCreate()
         zoneRepository = ZoneRepository(this)
         analyticsRepository = AnalyticsRepository(this)
         settingsRepository = SettingsRepository(this)
+
+        // Services and boot receivers can run before MainActivity is opened, so
+        // keep service-facing settings synchronized directly from DataStore.
+        applicationScope.launch {
+            combine(
+                settingsRepository.graceTimerSecondsFlow,
+                settingsRepository.hapticFeedbackEnabledFlow,
+                settingsRepository.entryNotificationsEnabledFlow,
+                settingsRepository.blockIntensityFlow
+            ) { grace, haptics, entryNotifications, intensity ->
+                RuntimeSettings(grace, haptics, entryNotifications, intensity)
+            }.collect { settings ->
+                graceTimerSeconds = settings.graceSeconds
+                hapticFeedbackEnabled = settings.haptics
+                entryNotificationsEnabled = settings.entryNotifications
+                blockIntensity = settings.intensity
+                if (!settingsReady.isCompleted) settingsReady.complete(Unit)
+            }
+        }
+    }
+
+    suspend fun awaitSettingsReady() {
+        settingsReady.await()
     }
 
     fun setEnforcement(info: ActiveEnforcementInfo?) { _activeEnforcement.value = info }
     fun postAnalyticsEvent(event: AnalyticsEvent) { _pendingAnalytics.value = event }
     fun consumeAnalyticsEvent() { _pendingAnalytics.value = null }
+
+    private data class RuntimeSettings(
+        val graceSeconds: Int,
+        val haptics: Boolean,
+        val entryNotifications: Boolean,
+        val intensity: BlockIntensity
+    )
 }

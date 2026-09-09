@@ -2,6 +2,7 @@ package com.example.bounds
 
 import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -54,6 +55,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.core.content.ContextCompat
 import com.example.bounds.model.AnalyticsEvent
 import com.example.bounds.model.ThemePreference
 import com.example.bounds.model.Zone
@@ -93,14 +95,13 @@ fun BoundsApp() {
     // ── App-wide settings (persisted via DataStore through ViewModel) ─────────
     val themePreference by boundsViewModel.themePreference.collectAsState()
     val graceTimerSeconds by boundsViewModel.graceTimerSeconds.collectAsState()
-    var hapticFeedbackEnabled by rememberSaveable { mutableStateOf(true) }
+    val hapticFeedbackEnabled by boundsViewModel.hapticFeedbackEnabled.collectAsState()
+    val entryNotificationsEnabled by boundsViewModel.entryNotificationsEnabled.collectAsState()
+    val blockIntensity by boundsViewModel.blockIntensity.collectAsState()
     // CurrentScreen is disposed when the user changes tabs. Keep manual lock
     // state above the tab content so returning to Current does not reset it.
     var manualIsLocked by rememberSaveable { mutableStateOf(false) }
     var manualStatusMsg by rememberSaveable { mutableStateOf("") }
-
-    LaunchedEffect(graceTimerSeconds) { app.graceTimerSeconds = graceTimerSeconds }
-    LaunchedEffect(hapticFeedbackEnabled) { app.hapticFeedbackEnabled = hapticFeedbackEnabled }
 
     // ── Usage Access permission ───────────────────────────────────────────────
     var hasUsageStatsPermission by remember {
@@ -109,6 +110,15 @@ fun BoundsApp() {
     var hasOverlayPermission by remember {
         mutableStateOf(
             Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(context)
+        )
+    }
+    var hasNotificationPermission by remember {
+        mutableStateOf(
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) == PackageManager.PERMISSION_GRANTED
         )
     }
 
@@ -120,6 +130,12 @@ fun BoundsApp() {
                 hasUsageStatsPermission = PermissionUtils.hasUsageStatsPermission(context)
                 hasOverlayPermission =
                     Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(context)
+                hasNotificationPermission =
+                    Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                        ContextCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.POST_NOTIFICATIONS
+                        ) == PackageManager.PERMISSION_GRANTED
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -147,6 +163,13 @@ fun BoundsApp() {
     ) { granted ->
         hasBackgroundLocation = granted
         if (granted) BoundsGeofenceManager.syncGeofences(context, app.zones)
+    }
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        hasNotificationPermission = granted
+        boundsViewModel.saveEntryNotificationsEnabled(granted)
     }
 
     // ── Sync zone list to Application singleton + platform geofences ──────────
@@ -214,7 +237,31 @@ fun BoundsApp() {
                         graceTimerSeconds        = graceTimerSeconds,
                         onGraceTimerChange       = { boundsViewModel.saveGraceTimerSeconds(it) },
                         hapticFeedbackEnabled    = hapticFeedbackEnabled,
-                        onHapticFeedbackChange   = { hapticFeedbackEnabled = it },
+                        onHapticFeedbackChange   = { boundsViewModel.saveHapticFeedbackEnabled(it) },
+                        entryNotificationsEnabled =
+                            entryNotificationsEnabled && hasNotificationPermission,
+                        onEntryNotificationsChange = { enabled ->
+                            if (
+                                enabled &&
+                                Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                ContextCompat.checkSelfPermission(
+                                    context,
+                                    Manifest.permission.POST_NOTIFICATIONS
+                                ) != PackageManager.PERMISSION_GRANTED
+                            ) {
+                                notificationPermissionLauncher.launch(
+                                    Manifest.permission.POST_NOTIFICATIONS
+                                )
+                            } else {
+                                boundsViewModel.saveEntryNotificationsEnabled(enabled)
+                            }
+                        },
+                        blockIntensity           = blockIntensity,
+                        onBlockIntensityChange   = { boundsViewModel.saveBlockIntensity(it) },
+                        onManageAppBlocklist     = {
+                            showSettingsScreen = false
+                            currentDestination = AppDestinations.ZONES
+                        },
                         onDeleteAnalyticsData    = { boundsViewModel.clearEvents() },
                         onBack                   = { showSettingsScreen = false },
                         hasUsageStatsPermission  = hasUsageStatsPermission,
