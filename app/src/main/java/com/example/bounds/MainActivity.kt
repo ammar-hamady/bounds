@@ -36,6 +36,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.weight
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
@@ -369,6 +370,7 @@ fun BoundsApp() {
                             animationSpec = tween(200),
                             label = "tabCrossfade",
                             modifier = Modifier.padding(innerPadding)
+                                .consumeWindowInsets(innerPadding)
                         ) { dest ->
                             when (dest) {
                                 AppDestinations.ZONES -> {

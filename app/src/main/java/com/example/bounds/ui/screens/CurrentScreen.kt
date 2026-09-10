@@ -18,6 +18,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -29,6 +30,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ElectricBolt
 import androidx.compose.material.icons.filled.LocationOff
@@ -54,6 +57,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.bounds.model.ActiveEnforcementInfo
@@ -140,255 +144,303 @@ fun CurrentScreen(
         if (m > 0) "$m:${s.toString().padStart(2, '0')}" else "0:${s.toString().padStart(2, '0')}"
     } else "—"
 
-    Column(
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
-        horizontalAlignment = Alignment.CenterHorizontally
+        contentAlignment = Alignment.TopCenter
     ) {
-
-        // ── Permission banners ────────────────────────────────────────────────
-        if (!hasFineLocation) {
-            LocationPermissionBanner(
-                onRequestPermission = onRequestFineLocation,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp)
-            )
-        } else if (!hasBackgroundLocation && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            BackgroundLocationBanner(
-                onRequestPermission = onRequestBackgroundLocation,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp)
-            )
-        }
-        if (!hasUsageStatsPermission) {
-            UsageAccessBanner(
-                onRequestUsageAccess = onRequestUsageAccess,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp)
-            )
-        }
-        if (!hasOverlayPermission) {
-            OverlayPermissionBanner(
-                onRequestPermission = onRequestOverlayPermission,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp)
-            )
+        val isCompact = maxHeight < 680.dp
+        val ringSize = when {
+            maxHeight < 420.dp -> 168.dp
+            maxHeight < 560.dp -> 200.dp
+            else -> 220.dp
         }
 
-        // ── Zone banner ───────────────────────────────────────────────────────
-        Row(
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 6.dp)
-                .background(BgBanner, RoundedCornerShape(50.dp))
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .background(
-                        color = if (isEnforcingZone) Amber else TextMuted,
-                        shape = CircleShape
-                    )
-            )
-            Text(
-                text  = "Currently in: ",
-                fontSize = 13.sp,
-                color = Color.White.copy(alpha = 0.7f)
-            )
-            Text(
-                text       = zoneName ?: "No active zone",
-                fontSize   = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-                color      = if (isEnforcingZone) Amber else TextMuted
-            )
-        }
-
-        Spacer(Modifier.weight(1f))
-
-        // ── Circular ring + animated centre ──────────────────────────────────
-        Box(contentAlignment = Alignment.Center, modifier = Modifier.size(240.dp)) {
-            Canvas(modifier = Modifier.size(240.dp)) {
-                val sw     = 14.dp.toPx()
-                val stroke = Stroke(width = sw, cap = StrokeCap.Round)
-                val inset  = sw / 2f
-                val arcSz  = Size(size.width - inset * 2, size.height - inset * 2)
-                val tl     = Offset(inset, inset)
-                drawArc(
-                    color = BgElevated, startAngle = -90f, sweepAngle = 360f,
-                    useCenter = false, topLeft = tl, size = arcSz, style = stroke
-                )
-                drawArc(
-                    color = ringColor, startAngle = -90f, sweepAngle = ringFraction * 360f,
-                    useCenter = false, topLeft = tl, size = arcSz, style = stroke
-                )
-            }
-
-            // Step 4: animate the ring centre content on lock-state change
-            AnimatedContent(
-                targetState  = lockState,
-                transitionSpec = {
-                    (fadeIn(tween(260)) + scaleIn(tween(300), initialScale = 0.82f)) togetherWith
-                    (fadeOut(tween(200)) + scaleOut(tween(220), targetScale = 0.82f))
-                },
-                label = "ringCentre"
-            ) { state ->
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    when (state) {
-                        LockState.GRACE -> {
-                            Text(
-                                text          = graceDisplay,
-                                fontSize      = 44.sp,
-                                fontWeight    = FontWeight.Bold,
-                                color         = Color.White,
-                                letterSpacing = (-1).sp
-                            )
-                            Text(
-                                text          = "GRACE PERIOD",
-                                fontSize      = 10.sp,
-                                letterSpacing = 2.sp,
-                                color         = TextMuted,
-                                modifier      = Modifier.padding(top = 4.dp)
-                            )
-                        }
-                        LockState.LOCKED -> {
-                            Text(
-                                text          = "LOCKED",
-                                fontSize      = 26.sp,
-                                fontWeight    = FontWeight.Bold,
-                                color         = Color.White,
-                                letterSpacing = 1.sp
-                            )
-                            Text(
-                                text          = "BLOCKING",
-                                fontSize      = 10.sp,
-                                letterSpacing = 2.sp,
-                                color         = TextMuted,
-                                modifier      = Modifier.padding(top = 4.dp)
-                            )
-                        }
-                        LockState.IDLE -> {
-                            Text(
-                                text       = "—",
-                                fontSize   = 36.sp,
-                                fontWeight = FontWeight.Bold,
-                                color      = TextMuted
-                            )
-                            Text(
-                                text          = "IDLE",
-                                fontSize      = 10.sp,
-                                letterSpacing = 2.sp,
-                                color         = TextMuted.copy(alpha = 0.5f),
-                                modifier      = Modifier.padding(top = 4.dp)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        Spacer(Modifier.height(20.dp))
-
-        Text(
-            text     = blockedAppsLabel,
-            fontSize = 14.sp,
-            color    = TextMuted,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 24.dp)
-        )
-
-        Spacer(Modifier.height(24.dp))
-        Spacer(Modifier.weight(1f))
-
-        // Status message (manual block feedback)
-        if (manualStatusMsg.isNotEmpty() && !isEnforcingZone) {
-            Text(
-                text     = manualStatusMsg,
-                fontSize = 12.sp,
-                color    = if (manualStatusMsg.contains("not installed"))
-                    MaterialTheme.colorScheme.error else Amber,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 6.dp)
-            )
-        }
-
-        // ── Lock / Unlock button ───────────────────────────────────────────────
-        Button(
-            onClick = {
-                if (manualIsLocked) {
-                    AppBlockingManager.stopAllBlocking(context)
-                    onManualStatusChange("")
-                    onManualLockChange(false)
-                } else if (!hasUsageStatsPermission) {
-                    onManualStatusChange("Usage Access is required to block Instagram")
-                    onRequestUsageAccess()
-                } else if (!hasOverlayPermission) {
-                    onManualStatusChange("Display over other apps is required to show the block screen")
-                    onRequestOverlayPermission()
-                } else {
-                    val duration = graceTimerSeconds.coerceAtLeast(5)
-                    val ok = AppBlockingManager.startBlockingApp(context, durationMinutes = duration)
-                    if (ok) {
-                        onManualStatusChange("✅ Instagram locked for $duration minutes")
-                        onManualLockChange(true)
-                        onManualBlockingStarted("Instagram", duration)
+                .fillMaxSize()
+                .then(
+                    if (isCompact) {
+                        Modifier.verticalScroll(rememberScrollState())
                     } else {
-                        onManualStatusChange("❌ Instagram not installed")
+                        Modifier
                     }
-                }
-            },
-            enabled = !isEnforcingZone,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .height(56.dp),
-            shape  = RoundedCornerShape(16.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor         = if (manualIsLocked) MaterialTheme.colorScheme.error else Amber,
-                contentColor           = if (manualIsLocked) Color.White else Color.Black,
-                disabledContainerColor = BgElevated,
-                disabledContentColor   = TextMuted.copy(alpha = 0.65f)
-            )
+                ),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(
-                text = when {
-                    isEnforcingZone -> "Locked by zone"
-                    manualIsLocked  -> "Unlock Phone"
-                    else            -> "Lock Phone"
-                },
-                fontSize   = 16.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
+            // ── Permission banners ────────────────────────────────────────────
+            if (!hasFineLocation) {
+                LocationPermissionBanner(
+                    onRequestPermission = onRequestFineLocation,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                )
+            } else if (!hasBackgroundLocation && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                BackgroundLocationBanner(
+                    onRequestPermission = onRequestBackgroundLocation,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                )
+            }
+            if (!hasUsageStatsPermission) {
+                UsageAccessBanner(
+                    onRequestUsageAccess = onRequestUsageAccess,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                )
+            }
+            if (!hasOverlayPermission) {
+                OverlayPermissionBanner(
+                    onRequestPermission = onRequestOverlayPermission,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                )
+            }
 
-        if (isEnforcingZone) {
-            Text(
-                text = if (isGrace) {
-                    "Zone protection will begin after the grace period and end when you leave."
-                } else {
-                    "This lock ends automatically when you leave ${zoneName ?: "the active zone"}."
-                },
-                fontSize = 12.sp,
-                color = TextMuted,
-                textAlign = TextAlign.Center,
+            // ── Zone banner ───────────────────────────────────────────────────
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 28.dp, vertical = 10.dp)
-            )
-        } else {
-            Spacer(Modifier.height(12.dp))
-        }
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
+                    .background(BgBanner, RoundedCornerShape(50.dp))
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .background(
+                            color = if (isEnforcingZone) Amber else TextMuted,
+                            shape = CircleShape
+                        )
+                )
+                Text(
+                    text = "Currently in: ",
+                    fontSize = 13.sp,
+                    color = Color.White.copy(alpha = 0.7f)
+                )
+                Text(
+                    text = zoneName ?: "No active zone",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (isEnforcingZone) Amber else TextMuted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+            }
 
-        Spacer(Modifier.height(16.dp))
+            val statusContainerModifier = if (isCompact) {
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp)
+            } else {
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            }
+
+            // ── Circular ring, state, and explanatory label ──────────────────
+            Box(
+                modifier = statusContainerModifier,
+                contentAlignment = if (isCompact) Alignment.TopCenter else Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(ringSize)) {
+                        Canvas(modifier = Modifier.size(ringSize)) {
+                            val sw = 14.dp.toPx()
+                            val stroke = Stroke(width = sw, cap = StrokeCap.Round)
+                            val inset = sw / 2f
+                            val arcSz = Size(size.width - inset * 2, size.height - inset * 2)
+                            val tl = Offset(inset, inset)
+                            drawArc(
+                                color = BgElevated,
+                                startAngle = -90f,
+                                sweepAngle = 360f,
+                                useCenter = false,
+                                topLeft = tl,
+                                size = arcSz,
+                                style = stroke
+                            )
+                            drawArc(
+                                color = ringColor,
+                                startAngle = -90f,
+                                sweepAngle = ringFraction * 360f,
+                                useCenter = false,
+                                topLeft = tl,
+                                size = arcSz,
+                                style = stroke
+                            )
+                        }
+
+                        // Step 4: animate the ring centre content on lock-state change
+                        AnimatedContent(
+                            targetState = lockState,
+                            transitionSpec = {
+                                (fadeIn(tween(260)) + scaleIn(tween(300), initialScale = 0.82f)) togetherWith
+                                    (fadeOut(tween(200)) + scaleOut(tween(220), targetScale = 0.82f))
+                            },
+                            label = "ringCentre"
+                        ) { state ->
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                when (state) {
+                                    LockState.GRACE -> {
+                                        Text(
+                                            text = graceDisplay,
+                                            fontSize = 44.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White,
+                                            letterSpacing = (-1).sp
+                                        )
+                                        Text(
+                                            text = "GRACE PERIOD",
+                                            fontSize = 10.sp,
+                                            letterSpacing = 2.sp,
+                                            color = TextMuted,
+                                            modifier = Modifier.padding(top = 4.dp)
+                                        )
+                                    }
+                                    LockState.LOCKED -> {
+                                        Text(
+                                            text = "LOCKED",
+                                            fontSize = 26.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White,
+                                            letterSpacing = 1.sp
+                                        )
+                                        Text(
+                                            text = "BLOCKING",
+                                            fontSize = 10.sp,
+                                            letterSpacing = 2.sp,
+                                            color = TextMuted,
+                                            modifier = Modifier.padding(top = 4.dp)
+                                        )
+                                    }
+                                    LockState.IDLE -> {
+                                        Text(
+                                            text = "—",
+                                            fontSize = 36.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = TextMuted
+                                        )
+                                        Text(
+                                            text = "IDLE",
+                                            fontSize = 10.sp,
+                                            letterSpacing = 2.sp,
+                                            color = TextMuted.copy(alpha = 0.5f),
+                                            modifier = Modifier.padding(top = 4.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(if (isCompact) 12.dp else 20.dp))
+
+                    Text(
+                        text = blockedAppsLabel,
+                        fontSize = 14.sp,
+                        color = TextMuted,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 24.dp)
+                    )
+                }
+            }
+
+            if (isCompact) {
+                Spacer(Modifier.height(20.dp))
+            }
+
+            // Status message (manual block feedback)
+            if (manualStatusMsg.isNotEmpty() && !isEnforcingZone) {
+                Text(
+                    text     = manualStatusMsg,
+                    fontSize = 12.sp,
+                    color    = if (manualStatusMsg.contains("not installed"))
+                        MaterialTheme.colorScheme.error else Amber,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 6.dp)
+                )
+            }
+
+            // ── Lock / Unlock button ─────────────────────────────────────────
+            Button(
+                onClick = {
+                    if (manualIsLocked) {
+                        AppBlockingManager.stopAllBlocking(context)
+                        onManualStatusChange("")
+                        onManualLockChange(false)
+                    } else if (!hasUsageStatsPermission) {
+                        onManualStatusChange("Usage Access is required to block Instagram")
+                        onRequestUsageAccess()
+                    } else if (!hasOverlayPermission) {
+                        onManualStatusChange("Display over other apps is required to show the block screen")
+                        onRequestOverlayPermission()
+                    } else {
+                        val duration = graceTimerSeconds.coerceAtLeast(5)
+                        val ok = AppBlockingManager.startBlockingApp(context, durationMinutes = duration)
+                        if (ok) {
+                            onManualStatusChange("✅ Instagram locked for $duration minutes")
+                            onManualLockChange(true)
+                            onManualBlockingStarted("Instagram", duration)
+                        } else {
+                            onManualStatusChange("❌ Instagram not installed")
+                        }
+                    }
+                },
+                enabled = !isEnforcingZone,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .height(56.dp),
+                shape  = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor         = if (manualIsLocked) MaterialTheme.colorScheme.error else Amber,
+                    contentColor           = if (manualIsLocked) Color.White else Color.Black,
+                    disabledContainerColor = BgElevated,
+                    disabledContentColor   = TextMuted.copy(alpha = 0.65f)
+                )
+            ) {
+                Text(
+                    text = when {
+                        isEnforcingZone -> "Locked by zone"
+                        manualIsLocked  -> "Unlock Phone"
+                        else            -> "Lock Phone"
+                    },
+                    fontSize   = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            if (isEnforcingZone) {
+                Text(
+                    text = if (isGrace) {
+                        "Zone protection will begin after the grace period and end when you leave."
+                    } else {
+                        "This lock ends automatically when you leave ${zoneName ?: "the active zone"}."
+                    },
+                    fontSize = 12.sp,
+                    color = TextMuted,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 28.dp, vertical = 10.dp)
+                )
+            } else {
+                Spacer(Modifier.height(12.dp))
+            }
+
+            Spacer(Modifier.height(16.dp))
+        }
     }
 }
 
