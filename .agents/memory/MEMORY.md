@@ -2,3 +2,4 @@
 - [Reliable Android blocking overlays](android-blocking-overlays.md) — enforce with a service-owned application overlay, not a background Activity launch.
 - [Service settings readiness](service-settings-readiness.md) — services must await the first persisted settings snapshot instead of consuming startup defaults.
 - [Android build environment](android-build-environment.md) — Gradle validation requires an Android SDK path; this workspace does not provide one by default.
+- [VPN consent recovery](vpn-consent-recovery.md) — after Android returns from VPN consent, retry any pending active-zone policy rather than only refreshing readiness.

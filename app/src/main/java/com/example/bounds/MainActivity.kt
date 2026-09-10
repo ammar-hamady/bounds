@@ -197,6 +197,15 @@ fun BoundsApp() {
     val vpnConsentLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) {
+        // Consent may have been requested while a zone was already active.
+        // Re-evaluate that policy instead of only changing the Settings label.
+        WebsiteBlockingManager.retryActivePolicy(context)
+    }
+
+    // The application-level website state starts with a conservative default.
+    // Resolve it when the UI first opens as well as when returning from Android
+    // Settings, otherwise previously granted consent can still appear unavailable.
+    LaunchedEffect(Unit) {
         WebsiteBlockingManager.refreshReadiness(context)
     }
 
