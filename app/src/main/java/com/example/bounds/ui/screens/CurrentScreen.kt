@@ -324,7 +324,7 @@ fun CurrentScreen(
         // ── Lock / Unlock button ───────────────────────────────────────────────
         Button(
             onClick = {
-                if (manualIsLocked || isEnforcingZone) {
+                if (manualIsLocked) {
                     AppBlockingManager.stopAllBlocking(context)
                     onManualStatusChange("")
                     onManualLockChange(false)
@@ -346,24 +346,47 @@ fun CurrentScreen(
                     }
                 }
             },
+            enabled = !isEnforcingZone,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp)
                 .height(56.dp),
             shape  = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = if (manualIsLocked || isBlocking) MaterialTheme.colorScheme.error else Amber,
-                contentColor   = if (manualIsLocked || isBlocking) Color.White else Color.Black
+                containerColor         = if (manualIsLocked) MaterialTheme.colorScheme.error else Amber,
+                contentColor           = if (manualIsLocked) Color.White else Color.Black,
+                disabledContainerColor = BgElevated,
+                disabledContentColor   = TextMuted.copy(alpha = 0.65f)
             )
         ) {
             Text(
-                text       = if (manualIsLocked || isBlocking) "Unlock Phone" else "Lock Phone",
+                text = when {
+                    isEnforcingZone -> "Locked by zone"
+                    manualIsLocked  -> "Unlock Phone"
+                    else            -> "Lock Phone"
+                },
                 fontSize   = 16.sp,
                 fontWeight = FontWeight.Bold
             )
         }
 
-        Spacer(Modifier.height(12.dp))
+        if (isEnforcingZone) {
+            Text(
+                text = if (isGrace) {
+                    "Zone protection will begin after the grace period and end when you leave."
+                } else {
+                    "This lock ends automatically when you leave ${zoneName ?: "the active zone"}."
+                },
+                fontSize = 12.sp,
+                color = TextMuted,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 28.dp, vertical = 10.dp)
+            )
+        } else {
+            Spacer(Modifier.height(12.dp))
+        }
 
         Spacer(Modifier.height(16.dp))
     }
