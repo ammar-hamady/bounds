@@ -20,9 +20,22 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.weight
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Home
@@ -36,7 +49,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -47,9 +59,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -295,159 +311,231 @@ fun BoundsApp() {
                 }
 
                 NavLayer.MAIN -> {
-                    NavigationSuiteScaffold(
-                        navigationSuiteItems = {
-                            AppDestinations.entries.forEach { dest ->
-                                item(
-                                    icon     = { Icon(imageVector = dest.icon, contentDescription = dest.label) },
-                                    label    = { Text(dest.label) },
-                                    selected = dest == currentDestination,
-                                    onClick  = { currentDestination = dest }
-                                )
-                            }
-                        }
-                    ) {
-                        Scaffold(
-                            modifier       = Modifier.fillMaxSize(),
-                            topBar         = {
-                                TopAppBar(
-                                    title = {
-                                        Text(
-                                            text       = currentDestination.label,
-                                            fontSize   = 20.sp,
-                                            fontWeight = FontWeight.Bold
+                    Scaffold(
+                        modifier = Modifier.fillMaxSize(),
+                        topBar = {
+                            TopAppBar(
+                                title = {
+                                    Text(
+                                        text = currentDestination.label,
+                                        fontSize = 20.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                },
+                                actions = {
+                                    IconButton(onClick = { showSettingsScreen = true }) {
+                                        Icon(
+                                            imageVector = Icons.Default.Settings,
+                                            contentDescription = "Settings"
                                         )
-                                    },
-                                    actions = {
-                                        IconButton(onClick = { showSettingsScreen = true }) {
-                                            Icon(
-                                                imageVector        = Icons.Default.Settings,
-                                                contentDescription = "Settings"
+                                    }
+                                },
+                                colors = TopAppBarDefaults.topAppBarColors(
+                                    containerColor = MaterialTheme.colorScheme.background
+                                )
+                            )
+                        },
+                        bottomBar = {
+                            BoundsBottomNavigation(
+                                selected = currentDestination,
+                                onSelect = { currentDestination = it }
+                            )
+                        },
+                        containerColor = MaterialTheme.colorScheme.background
+                    ) { innerPadding ->
+
+                        // Crossfade between tabs (~200 ms)
+                        Crossfade(
+                            targetState = currentDestination,
+                            animationSpec = tween(200),
+                            label = "tabCrossfade",
+                            modifier = Modifier.padding(innerPadding)
+                        ) { dest ->
+                            when (dest) {
+                                AppDestinations.ZONES -> {
+                                    HomeScreen(
+                                        zones = zones,
+                                        onAddZoneClick = {
+                                            editingZoneId = null
+                                            showAddZoneScreen = true
+                                        },
+                                        onToggleZone = { id, enabled ->
+                                            boundsViewModel.saveZones(
+                                                zones.map { if (it.id == id) it.copy(isEnabled = enabled) else it }
+                                            )
+                                        },
+                                        onEditZone = { zone ->
+                                            editingZoneId = zone.id
+                                            showAddZoneScreen = true
+                                        },
+                                        onDeleteZone = { id ->
+                                            boundsViewModel.saveZones(zones.filter { it.id != id })
+                                        }
+                                    )
+                                }
+
+                                AppDestinations.CURRENT -> {
+                                    CurrentScreen(
+                                        activeEnforcement = activeEnforcement,
+                                        manualIsLocked = manualIsLocked,
+                                        manualStatusMsg = manualStatusMsg,
+                                        hasFineLocation = hasFineLocation,
+                                        hasBackgroundLocation = hasBackgroundLocation,
+                                        hasUsageStatsPermission = hasUsageStatsPermission,
+                                        hasOverlayPermission = hasOverlayPermission,
+                                        graceTimerSeconds = graceTimerSeconds,
+                                        zones = zones,
+                                        onRequestFineLocation = {
+                                            fineLocationLauncher.launch(
+                                                arrayOf(
+                                                    Manifest.permission.ACCESS_FINE_LOCATION,
+                                                    Manifest.permission.ACCESS_COARSE_LOCATION
+                                                )
+                                            )
+                                        },
+                                        onRequestBackgroundLocation = {
+                                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                                bgLocationLauncher.launch(
+                                                    Manifest.permission.ACCESS_BACKGROUND_LOCATION
+                                                )
+                                            }
+                                        },
+                                        onRequestUsageAccess = {
+                                            context.startActivity(
+                                                Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+                                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                            )
+                                        },
+                                        onRequestOverlayPermission = {
+                                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                                context.startActivity(
+                                                    Intent(
+                                                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                                        Uri.parse("package:${context.packageName}")
+                                                    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                )
+                                            }
+                                        },
+                                        onManualLockChange = { manualIsLocked = it },
+                                        onManualStatusChange = { manualStatusMsg = it },
+                                        onSimulateEntry = { zone ->
+                                            val intent = Intent(context, GeofenceEnforcementService::class.java).apply {
+                                                action = GeofenceEnforcementService.ACTION_ZONE_ENTER
+                                                putExtra(GeofenceEnforcementService.EXTRA_ZONE_ID, zone.id)
+                                                putExtra(GeofenceEnforcementService.EXTRA_ZONE_NAME, zone.name)
+                                                putStringArrayListExtra(
+                                                    GeofenceEnforcementService.EXTRA_BLOCKED_APPS,
+                                                    ArrayList(zone.blockedApps)
+                                                )
+                                                putExtra(GeofenceEnforcementService.EXTRA_IS_TIME_SENSITIVE, zone.isTimeSensitive)
+                                                putExtra(GeofenceEnforcementService.EXTRA_START_TIME, zone.startTime)
+                                                putExtra(GeofenceEnforcementService.EXTRA_END_TIME, zone.endTime)
+                                            }
+                                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                                context.startForegroundService(intent)
+                                            } else {
+                                                context.startService(intent)
+                                            }
+                                        },
+                                        onManualBlockingStarted = { appName, durationMinutes ->
+                                            boundsViewModel.addEvent(
+                                                AnalyticsEvent(
+                                                    id = UUID.randomUUID().toString(),
+                                                    appName = appName,
+                                                    zoneName = "Manual Block",
+                                                    durationMinutes = durationMinutes,
+                                                    timestampMs = System.currentTimeMillis()
+                                                )
                                             )
                                         }
-                                    },
-                                    colors = TopAppBarDefaults.topAppBarColors(
-                                        containerColor = MaterialTheme.colorScheme.background
                                     )
-                                )
-                            },
-                            containerColor = MaterialTheme.colorScheme.background
-                        ) { innerPadding ->
+                                }
 
-                            // Crossfade between tabs (~200 ms)
-                            Crossfade(
-                                targetState   = currentDestination,
-                                animationSpec = tween(200),
-                                label         = "tabCrossfade",
-                                modifier      = Modifier.padding(innerPadding)
-                            ) { dest ->
-                                when (dest) {
-                                    AppDestinations.ZONES -> {
-                                        HomeScreen(
-                                            zones          = zones,
-                                            onAddZoneClick = {
-                                                editingZoneId = null
-                                                showAddZoneScreen = true
-                                            },
-                                            onToggleZone   = { id, enabled ->
-                                                boundsViewModel.saveZones(
-                                                    zones.map { if (it.id == id) it.copy(isEnabled = enabled) else it }
-                                                )
-                                            },
-                                            onEditZone     = { zone ->
-                                                editingZoneId = zone.id
-                                                showAddZoneScreen = true
-                                            },
-                                            onDeleteZone   = { id ->
-                                                boundsViewModel.saveZones(zones.filter { it.id != id })
-                                            }
-                                        )
-                                    }
-
-                                    AppDestinations.CURRENT -> {
-                                        CurrentScreen(
-                                            activeEnforcement           = activeEnforcement,
-                                            manualIsLocked              = manualIsLocked,
-                                            manualStatusMsg             = manualStatusMsg,
-                                            hasFineLocation             = hasFineLocation,
-                                            hasBackgroundLocation       = hasBackgroundLocation,
-                                            hasUsageStatsPermission     = hasUsageStatsPermission,
-                                            hasOverlayPermission        = hasOverlayPermission,
-                                            graceTimerSeconds           = graceTimerSeconds,
-                                            zones                       = zones,
-                                            onRequestFineLocation       = {
-                                                fineLocationLauncher.launch(
-                                                    arrayOf(
-                                                        Manifest.permission.ACCESS_FINE_LOCATION,
-                                                        Manifest.permission.ACCESS_COARSE_LOCATION
-                                                    )
-                                                )
-                                            },
-                                            onRequestBackgroundLocation = {
-                                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                                                    bgLocationLauncher.launch(
-                                                        Manifest.permission.ACCESS_BACKGROUND_LOCATION
-                                                    )
-                                                }
-                                            },
-                                            onRequestUsageAccess        = {
-                                                context.startActivity(
-                                                    Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
-                                                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                                )
-                                            },
-                                            onRequestOverlayPermission  = {
-                                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                                                    context.startActivity(
-                                                        Intent(
-                                                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                                            Uri.parse("package:${context.packageName}")
-                                                        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                                    )
-                                                }
-                                            },
-                                             onManualLockChange          = { manualIsLocked = it },
-                                             onManualStatusChange        = { manualStatusMsg = it },
-                                            onSimulateEntry             = { zone ->
-                                                val intent = Intent(context, GeofenceEnforcementService::class.java).apply {
-                                                    action = GeofenceEnforcementService.ACTION_ZONE_ENTER
-                                                    putExtra(GeofenceEnforcementService.EXTRA_ZONE_ID,   zone.id)
-                                                    putExtra(GeofenceEnforcementService.EXTRA_ZONE_NAME, zone.name)
-                                                    putStringArrayListExtra(
-                                                        GeofenceEnforcementService.EXTRA_BLOCKED_APPS,
-                                                        ArrayList(zone.blockedApps)
-                                                    )
-                                                    putExtra(GeofenceEnforcementService.EXTRA_IS_TIME_SENSITIVE, zone.isTimeSensitive)
-                                                    putExtra(GeofenceEnforcementService.EXTRA_START_TIME, zone.startTime)
-                                                    putExtra(GeofenceEnforcementService.EXTRA_END_TIME,   zone.endTime)
-                                                }
-                                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                                    context.startForegroundService(intent)
-                                                } else {
-                                                    context.startService(intent)
-                                                }
-                                            },
-                                            onManualBlockingStarted     = { appName, durationMinutes ->
-                                                boundsViewModel.addEvent(
-                                                    AnalyticsEvent(
-                                                        id              = UUID.randomUUID().toString(),
-                                                        appName         = appName,
-                                                        zoneName        = "Manual Block",
-                                                        durationMinutes = durationMinutes,
-                                                        timestampMs     = System.currentTimeMillis()
-                                                    )
-                                                )
-                                            }
-                                        )
-                                    }
-
-                                    AppDestinations.ANALYTICS -> {
-                                        AnalyticsScreen(events = analyticsEvents)
-                                    }
+                                AppDestinations.ANALYTICS -> {
+                                    AnalyticsScreen(events = analyticsEvents)
                                 }
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BoundsBottomNavigation(
+    selected: AppDestinations,
+    onSelect: (AppDestinations) -> Unit
+) {
+    val dockShape = RoundedCornerShape(24.dp)
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.background)
+            .navigationBarsPadding()
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(64.dp)
+                .clip(dockShape)
+                .background(MaterialTheme.colorScheme.surface)
+                .border(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.9f),
+                    shape = dockShape
+                )
+                .padding(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Keep Current in the middle so the app's primary status screen
+            // remains the visual anchor of the navigation.
+            listOf(
+                AppDestinations.ZONES,
+                AppDestinations.CURRENT,
+                AppDestinations.ANALYTICS
+            ).forEach { destination ->
+                val isSelected = destination == selected
+                val itemShape = RoundedCornerShape(17.dp)
+
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                        .clip(itemShape)
+                        .background(
+                            if (isSelected) MaterialTheme.colorScheme.primary
+                            else Color.Transparent
+                        )
+                        .clickable { onSelect(destination) }
+                        .padding(horizontal = 6.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = destination.icon,
+                        contentDescription = destination.label,
+                        modifier = Modifier.size(19.dp),
+                        tint = if (isSelected) {
+                            MaterialTheme.colorScheme.onPrimary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    )
+                    Text(
+                        text = destination.label,
+                        fontSize = 11.sp,
+                        fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.SemiBold,
+                        color = if (isSelected) {
+                            MaterialTheme.colorScheme.onPrimary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    )
                 }
             }
         }
