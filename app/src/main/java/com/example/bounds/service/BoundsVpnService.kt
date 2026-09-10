@@ -65,7 +65,7 @@ class BoundsVpnService : VpnService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent == null) {
-            markUnavailable("Website VPN service restarted without its zone policy. Re-enter the zone to recover.")
+            markError("Website VPN restarted without a zone policy. Re-enter the zone or retry from Settings.")
             return START_NOT_STICKY
         }
         when (intent?.action) {
@@ -80,7 +80,7 @@ class BoundsVpnService : VpnService() {
                 startForeground(NOTIFICATION_ID, notification())
                 stoppingIntentionally = false
                 val zoneId = intent.getStringExtra(EXTRA_ZONE_ID) ?: run {
-                    markUnavailable("Website policy is missing its zone.")
+                    markError("Website protection could not start because its zone policy is missing.")
                     stopSelf()
                     return START_NOT_STICKY
                 }
@@ -88,7 +88,7 @@ class BoundsVpnService : VpnService() {
                     ?.let(DomainBlocklist::canonicalizeAll)
                     .orEmpty()
                 if (domains.isEmpty()) {
-                    markUnavailable("No valid website domains are configured for this zone.")
+                    markError("Website protection could not start because this zone has no valid domains.")
                     stopSelf()
                     return START_NOT_STICKY
                 }
@@ -113,7 +113,7 @@ class BoundsVpnService : VpnService() {
             (applicationContext as BoundsApplication).websiteEnforcement.value.status ==
             WebsiteEnforcementStatus.ACTIVE
         ) {
-            markUnavailable("Website VPN stopped. Re-enter the zone or try again from Settings.")
+            markError("Website protection stopped unexpectedly. Try again from Settings.")
         }
         super.onDestroy()
     }
@@ -122,7 +122,7 @@ class BoundsVpnService : VpnService() {
 
     private fun establishTunnel(zoneId: String, domains: List<String>) {
         if (VpnService.prepare(this) != null) {
-            markUnavailable("VPN consent is required before Bounds can block websites.")
+            markConsentRequired("VPN approval is no longer available. Approve Bounds again in Settings.")
             stopSelf()
             return
         }
@@ -138,7 +138,9 @@ class BoundsVpnService : VpnService() {
         val established = runCatching { builder.establish() }.getOrNull()
         if (established == null) {
             stoppingIntentionally = true
-            markDisplaced("Another VPN is active, so Bounds cannot block websites right now.")
+            markDisplaced(
+                "Bounds could not take VPN ownership. Disable another or always-on VPN, then try again."
+            )
             stopSelf()
             return
         }
@@ -202,8 +204,8 @@ class BoundsVpnService : VpnService() {
             val app = applicationContext as BoundsApplication
             app.setWebsiteEnforcement(
                 WebsiteEnforcementState(
-                    status = WebsiteEnforcementStatus.UNAVAILABLE,
-                    message = "The network changed or is unavailable. Try website protection again.",
+                    status = WebsiteEnforcementStatus.ERROR,
+                    message = "The upstream DNS connection failed. Check the network, then retry from Settings.",
                     activeZoneId = activeZoneId,
                     domains = activeDomains
                 )
@@ -235,8 +237,8 @@ class BoundsVpnService : VpnService() {
                 val app = applicationContext as BoundsApplication
                 app.setWebsiteEnforcement(
                     WebsiteEnforcementState(
-                        status = WebsiteEnforcementStatus.UNAVAILABLE,
-                        message = "The network changed or is unavailable. Try website protection again.",
+                        status = WebsiteEnforcementStatus.ERROR,
+                        message = "The active network was lost. Reconnect, then retry website protection.",
                         activeZoneId = activeZoneId,
                         domains = activeDomains
                     )
@@ -264,7 +266,7 @@ class BoundsVpnService : VpnService() {
     private fun updateReadyState() {
         val app = applicationContext as BoundsApplication
         val status = if (VpnService.prepare(this) == null) WebsiteEnforcementStatus.READY
-        else WebsiteEnforcementStatus.UNAVAILABLE
+        else WebsiteEnforcementStatus.CONSENT_REQUIRED
         app.setWebsiteEnforcement(
             WebsiteEnforcementState(
                 status = status,
@@ -277,9 +279,15 @@ class BoundsVpnService : VpnService() {
         )
     }
 
-    private fun markUnavailable(message: String) {
+    private fun markConsentRequired(message: String) {
         (applicationContext as BoundsApplication).setWebsiteEnforcement(
-            WebsiteEnforcementState(WebsiteEnforcementStatus.UNAVAILABLE, message)
+            WebsiteEnforcementState(WebsiteEnforcementStatus.CONSENT_REQUIRED, message)
+        )
+    }
+
+    private fun markError(message: String) {
+        (applicationContext as BoundsApplication).setWebsiteEnforcement(
+            WebsiteEnforcementState(WebsiteEnforcementStatus.ERROR, message)
         )
     }
 

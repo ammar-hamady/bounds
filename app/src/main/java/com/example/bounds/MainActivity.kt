@@ -1,6 +1,7 @@
 package com.example.bounds
 
 import android.Manifest
+import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -142,6 +143,7 @@ fun BoundsApp() {
                 ) == PackageManager.PERMISSION_GRANTED
         )
     }
+    var suppressNextVpnResumeRefresh by remember { mutableStateOf(false) }
 
     // Recheck whenever the app resumes (user may have just returned from Settings)
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -157,7 +159,11 @@ fun BoundsApp() {
                             context,
                             Manifest.permission.POST_NOTIFICATIONS
                         ) == PackageManager.PERMISSION_GRANTED
-                WebsiteBlockingManager.refreshReadiness(context)
+                if (suppressNextVpnResumeRefresh) {
+                    suppressNextVpnResumeRefresh = false
+                } else {
+                    WebsiteBlockingManager.refreshReadiness(context)
+                }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -196,10 +202,11 @@ fun BoundsApp() {
 
     val vpnConsentLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
-    ) {
-        // Consent may have been requested while a zone was already active.
-        // Re-evaluate that policy instead of only changing the Settings label.
-        WebsiteBlockingManager.retryActivePolicy(context)
+    ) { result ->
+        WebsiteBlockingManager.handleConsentResult(
+            context = context,
+            approvalReported = result.resultCode == Activity.RESULT_OK
+        )
     }
 
     // The application-level website state starts with a conservative default.
@@ -312,6 +319,11 @@ fun BoundsApp() {
                             if (prepareIntent == null) {
                                 WebsiteBlockingManager.retryActivePolicy(context)
                             } else {
+                                // Activity results can arrive before or after ON_RESUME.
+                                // Suppress this consent flow's passive refresh so it cannot
+                                // overwrite the more specific result or startup state.
+                                suppressNextVpnResumeRefresh = true
+                                WebsiteBlockingManager.markConsentPending(context)
                                 vpnConsentLauncher.launch(prepareIntent)
                             }
                         }

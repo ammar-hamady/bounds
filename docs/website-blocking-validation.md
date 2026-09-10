@@ -6,6 +6,11 @@ promise to defeat browser-encrypted DNS or direct IP access.
 
 - [ ] In Settings, tap **Website blocklist**, approve Bounds in the Android VPN
       consent flow, return to Bounds, and confirm the state reads **Ready**.
+- [ ] Cancel the consent flow and confirm Settings reads **Approval needed** with
+      a message that approval was cancelled; approve on the next attempt.
+- [ ] Approve while a zone with domain rules is already active and outside its
+      grace period. Confirm the state advances through **Starting** to **Active**
+      without leaving and re-entering the zone.
 - [ ] Create a zone with `example.com` and a second selected app. Confirm the
       domain is normalized, duplicate entries are rejected, and malformed
       entries show an understandable error.
@@ -27,5 +32,8 @@ promise to defeat browser-encrypted DNS or direct IP access.
       blocking until the service has re-established its tunnel.
 - [ ] Start another VPN while Bounds is active. Confirm Bounds reports
       **Another VPN** / displaced rather than claiming domains are blocked.
+- [ ] From **Another VPN** or **Needs attention**, disable the conflicting VPN or
+      restore the network, tap **Try again**, and confirm the pending zone policy
+      starts without restarting Bounds.
 - [ ] Record that cached browser lookups, Chrome DoH/DoT, and IP-literal
       navigation are unsupported bypass cases rather than regressions.

@@ -5,14 +5,17 @@ package com.example.bounds.model
  * described as active unless the VPN service successfully established its TUN.
  */
 enum class WebsiteEnforcementStatus {
-    UNAVAILABLE,
+    CONSENT_REQUIRED,
+    AWAITING_CONSENT,
     READY,
+    STARTING,
     ACTIVE,
-    DISPLACED
+    DISPLACED,
+    ERROR
 }
 
 data class WebsiteEnforcementState(
-    val status: WebsiteEnforcementStatus = WebsiteEnforcementStatus.UNAVAILABLE,
+    val status: WebsiteEnforcementStatus = WebsiteEnforcementStatus.CONSENT_REQUIRED,
     val message: String = "VPN approval is required for website blocking.",
     val activeZoneId: String? = null,
     val domains: List<String> = emptyList()

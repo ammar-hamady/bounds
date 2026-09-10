@@ -298,10 +298,13 @@ fun SettingsScreen(
                     icon = Icons.Filled.Language,
                     label = "Website blocklist",
                     value = when (websiteEnforcement.status) {
+                        WebsiteEnforcementStatus.CONSENT_REQUIRED -> "Approval needed"
+                        WebsiteEnforcementStatus.AWAITING_CONSENT -> "Waiting"
                         WebsiteEnforcementStatus.ACTIVE -> "Active"
                         WebsiteEnforcementStatus.READY -> "Ready"
+                        WebsiteEnforcementStatus.STARTING -> "Starting"
                         WebsiteEnforcementStatus.DISPLACED -> "Another VPN"
-                        WebsiteEnforcementStatus.UNAVAILABLE -> "Unavailable"
+                        WebsiteEnforcementStatus.ERROR -> "Needs attention"
                     },
                     showArrow = true,
                     onClick = { showWebsiteInfo = true }
@@ -404,14 +407,23 @@ fun SettingsScreen(
                         },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Amber,
-                            contentColor = Color.Black
-                        )
+                            contentColor = Color.Black,
+                            disabledContainerColor = AmberDim,
+                            disabledContentColor = TextMuted
+                        ),
+                        enabled = websiteEnforcement.status !=
+                            WebsiteEnforcementStatus.AWAITING_CONSENT &&
+                            websiteEnforcement.status != WebsiteEnforcementStatus.STARTING
                     ) {
                         Text(
-                            if (websiteEnforcement.status == WebsiteEnforcementStatus.DISPLACED) {
-                                "Try again"
-                            } else {
-                                "Approve VPN"
+                            when (websiteEnforcement.status) {
+                                WebsiteEnforcementStatus.CONSENT_REQUIRED -> "Approve VPN"
+                                WebsiteEnforcementStatus.AWAITING_CONSENT -> "Waiting…"
+                                WebsiteEnforcementStatus.READY -> "Check again"
+                                WebsiteEnforcementStatus.STARTING -> "Starting…"
+                                WebsiteEnforcementStatus.DISPLACED,
+                                WebsiteEnforcementStatus.ERROR -> "Try again"
+                                WebsiteEnforcementStatus.ACTIVE -> ""
                             }
                         )
                     }
