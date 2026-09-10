@@ -1,0 +1,44 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "agUU5ff86FGln_uHmLkFP"
+uri = "file://attached_assets/bounds-logo/bounds-app-store-icon-512.png"
+type = "image"
+title = "Bounds App Store Icon"
+description = "512 × 512 full-bleed PNG for the Google Play listing."
+logical_id = "4d720afe-854b-4b77-b02d-98285cfd99a6"
+content_hash = "sha256:7e5f7fe6400a1c8002ee30da22347e50f4004b775057e534fb1f0da449fb3b3c"
+size = 17244
+mtime_ms = 1789039378162
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:eb5e7434-fa19-4a98-8368-012dbc400236/4d720afe-854b-4b77-b02d-98285cfd99a6/5280924c-e2ee-4071-b86a-5cb0b11c8184"
+storage_version_token = "1789039403877613"
+content_type = "image/png"
+
+[[outputs]]
+id = "0E-FFW8LrdMUmm5HGN0Vm"
+uri = "file://attached_assets/bounds-logo/bounds-wordmark-dark.png"
+type = "image"
+title = "Bounds Wordmark"
+description = "Primary amber and deep-navy wordmark for light backgrounds."
+logical_id = "9aaa4074-35eb-4d48-add8-91c724e88e5a"
+content_hash = "sha256:9f8701e9b5d6f8f909914e0713c74bb760b01598204cb863bf9e03a5cb1bd41a"
+size = 59500
+mtime_ms = 1789039379206
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:eb5e7434-fa19-4a98-8368-012dbc400236/9aaa4074-35eb-4d48-add8-91c724e88e5a/215c25fb-864b-48ef-8605-957ba3e36ac1"
+storage_version_token = "1789039404335940"
+content_type = "image/png"
+
+[[outputs]]
+id = "MwZMXU8L3Dz4o6wtIguxJ"
+uri = "file://attached_assets/bounds-logo/bounds-logo-starter-set.zip"
+type = "unspecified"
+title = "Bounds Logo Starter Set"
+description = "SVG and PNG app icon, color mark, wordmarks, monochrome versions, and usage notes."
+logical_id = "568ed3c2-927b-4232-aa0a-25db73e48fd5"
+content_hash = "sha256:57cd6d2a06449eb778c0377d46652830a5e95a7ca04e2ee54b96c39b01d4e4e1"
+size = 761506
+mtime_ms = 1789039379602
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:eb5e7434-fa19-4a98-8368-012dbc400236/568ed3c2-927b-4232-aa0a-25db73e48fd5/59116844-16a0-4423-bb51-70cb45574c89"
+storage_version_token = "1789039404917775"
+content_type = "application/octet-stream"

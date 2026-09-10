@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">Bounds monochrome dark mark</title>
+  <path
+    d="M343 136 A148 148 0 1 0 397 210"
+    fill="none"
+    stroke="#14243A"
+    stroke-width="58"
+    stroke-linecap="round"
+  />
+  <circle cx="256" cy="256" r="42" fill="#14243A"/>
+</svg>

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 400" role="img" aria-labelledby="title">
+  <title id="title">Bounds dark wordmark</title>
+  <g transform="translate(30 24) scale(.68)">
+    <path
+      d="M343 136 A148 148 0 1 0 397 210"
+      fill="none"
+      stroke="#F5A623"
+      stroke-width="58"
+      stroke-linecap="round"
+    />
+    <circle cx="256" cy="256" r="42" fill="#14243A"/>
+  </g>
+  <text
+    x="420"
+    y="260"
+    fill="#14243A"
+    font-family="Manrope, Inter, Arial, sans-serif"
+    font-size="190"
+    font-weight="750"
+    letter-spacing="-7"
+  >Bounds</text>
+</svg>
