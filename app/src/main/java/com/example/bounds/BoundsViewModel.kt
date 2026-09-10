@@ -46,6 +46,9 @@ class BoundsViewModel(
     val blockIntensity: StateFlow<BlockIntensity> = settingsRepository.blockIntensityFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, BlockIntensity.STRICT)
 
+    val defaultBlockedApps: StateFlow<List<String>> = settingsRepository.defaultBlockedAppsFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
     fun saveZones(zones: List<Zone>) {
         viewModelScope.launch { zoneRepository.saveZones(zones) }
     }
@@ -78,6 +81,10 @@ class BoundsViewModel(
 
     fun saveBlockIntensity(intensity: BlockIntensity) {
         viewModelScope.launch { settingsRepository.saveBlockIntensity(intensity) }
+    }
+
+    fun saveDefaultBlockedApps(apps: List<String>) {
+        viewModelScope.launch { settingsRepository.saveDefaultBlockedApps(apps) }
     }
 
     companion object {

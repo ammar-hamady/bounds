@@ -20,7 +20,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
-import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Delete
@@ -66,6 +65,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.bounds.model.BlockIntensity
 import com.example.bounds.model.ThemePreference
+import com.example.bounds.ui.components.AppList
+import com.example.bounds.ui.components.defaultAppList
 import com.example.bounds.ui.theme.Amber
 import com.example.bounds.ui.theme.AmberDim
 import com.example.bounds.ui.theme.BgElevated
@@ -88,7 +89,8 @@ fun SettingsScreen(
     onEntryNotificationsChange: (Boolean) -> Unit,
     blockIntensity: BlockIntensity,
     onBlockIntensityChange: (BlockIntensity) -> Unit,
-    onManageAppBlocklist: () -> Unit,
+    defaultBlockedApps: List<String>,
+    onDefaultBlockedAppsChange: (List<String>) -> Unit,
     onDeleteAnalyticsData: () -> Unit,
     onBack: () -> Unit,
     hasUsageStatsPermission: Boolean = true,
@@ -96,6 +98,9 @@ fun SettingsScreen(
     modifier: Modifier = Modifier
 ) {
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var selectedApps by remember(defaultBlockedApps) {
+        mutableStateOf(defaultAppList(defaultBlockedApps))
+    }
 
     Scaffold(
         topBar = {
@@ -269,12 +274,19 @@ fun SettingsScreen(
 
             // ── BLOCKED APPS ──────────────────────────────────────────────────
             SettingsGroup(label = "BLOCKED APPS") {
-                SettingsRow(
-                    icon = Icons.Filled.Apps,
-                    label = "App blocklist",
-                    value = "Managed per zone",
-                    showArrow = true,
-                    onClick = onManageAppBlocklist
+                AppList(
+                    apps = selectedApps,
+                    title = null,
+                    onAppSelectionChange = { appId, isSelected ->
+                        val updatedApps = selectedApps.map {
+                            if (it.id == appId) it.copy(isSelected = isSelected) else it
+                        }
+                        selectedApps = updatedApps
+                        onDefaultBlockedAppsChange(
+                            updatedApps.filter { it.isSelected }.map { it.name }
+                        )
+                    },
+                    modifier = Modifier.padding(8.dp)
                 )
                 SettingsDivider()
                 SettingsRow(

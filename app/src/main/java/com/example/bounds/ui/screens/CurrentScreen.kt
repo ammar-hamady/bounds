@@ -305,45 +305,6 @@ fun CurrentScreen(
         )
 
         Spacer(Modifier.height(24.dp))
-
-        // ── Feed lock illustration — Step 4: icon animates on lock change ─────
-        Box(
-            modifier = Modifier
-                .size(width = 88.dp, height = 108.dp)
-                .background(BgSurface, RoundedCornerShape(14.dp))
-                .border(1.dp, BorderDim, RoundedCornerShape(14.dp)),
-            contentAlignment = Alignment.Center
-        ) {
-            AnimatedContent(
-                targetState  = isBlocking,
-                transitionSpec = {
-                    (fadeIn(tween(250)) + scaleIn(tween(280), initialScale = 0.78f)) togetherWith
-                    (fadeOut(tween(180)) + scaleOut(tween(200), targetScale = 0.78f))
-                },
-                label = "feedIcon"
-            ) { locked ->
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Icon(
-                        imageVector    = if (locked) Icons.Default.Lock else Icons.Default.LockOpen,
-                        contentDescription = null,
-                        tint           = if (locked) Amber else TextMuted,
-                        modifier       = Modifier.size(28.dp)
-                    )
-                    Text(
-                        text          = if (locked) "FEED\nLOCKED" else "FEED\nFREE",
-                        fontSize      = 9.sp,
-                        fontWeight    = FontWeight.Bold,
-                        letterSpacing = 1.2.sp,
-                        color         = if (locked) Amber.copy(alpha = 0.7f) else TextMuted.copy(alpha = 0.5f),
-                        textAlign     = TextAlign.Center
-                    )
-                }
-            }
-        }
-
         Spacer(Modifier.weight(1f))
 
         // Status message (manual block feedback)
@@ -403,31 +364,6 @@ fun CurrentScreen(
         }
 
         Spacer(Modifier.height(12.dp))
-
-        // ── Simulate Entry ────────────────────────────────────────────────────
-        val simulateZone = zones.firstOrNull { it.isEnabled && it.blockedApps.isNotEmpty() }
-        if (simulateZone != null) {
-            TextButton(
-                onClick  = { onSimulateEntry(simulateZone) },
-                modifier = Modifier
-                    .background(BgBanner, RoundedCornerShape(50.dp))
-                    .padding(horizontal = 4.dp)
-            ) {
-                Icon(
-                    imageVector    = Icons.Default.ElectricBolt,
-                    contentDescription = null,
-                    tint           = Amber,
-                    modifier       = Modifier.size(14.dp)
-                )
-                Spacer(Modifier.width(4.dp))
-                Text(
-                    text       = "Simulate Entry · ${simulateZone.name}",
-                    fontSize   = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color      = Amber
-                )
-            }
-        }
 
         Spacer(Modifier.height(16.dp))
     }

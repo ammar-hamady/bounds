@@ -98,6 +98,7 @@ fun BoundsApp() {
     val hapticFeedbackEnabled by boundsViewModel.hapticFeedbackEnabled.collectAsState()
     val entryNotificationsEnabled by boundsViewModel.entryNotificationsEnabled.collectAsState()
     val blockIntensity by boundsViewModel.blockIntensity.collectAsState()
+    val defaultBlockedApps by boundsViewModel.defaultBlockedApps.collectAsState()
     // CurrentScreen is disposed when the user changes tabs. Keep manual lock
     // state above the tab content so returning to Current does not reset it.
     var manualIsLocked by rememberSaveable { mutableStateOf(false) }
@@ -258,10 +259,8 @@ fun BoundsApp() {
                         },
                         blockIntensity           = blockIntensity,
                         onBlockIntensityChange   = { boundsViewModel.saveBlockIntensity(it) },
-                        onManageAppBlocklist     = {
-                            showSettingsScreen = false
-                            currentDestination = AppDestinations.ZONES
-                        },
+                        defaultBlockedApps       = defaultBlockedApps,
+                        onDefaultBlockedAppsChange = { boundsViewModel.saveDefaultBlockedApps(it) },
                         onDeleteAnalyticsData    = { boundsViewModel.clearEvents() },
                         onBack                   = { showSettingsScreen = false },
                         hasUsageStatsPermission  = hasUsageStatsPermission,
@@ -290,7 +289,8 @@ fun BoundsApp() {
                             showAddZoneScreen = false
                             editingZoneId = null
                         },
-                        initialZone = editingZone
+                        initialZone = editingZone,
+                        defaultBlockedApps = defaultBlockedApps
                     )
                 }
 

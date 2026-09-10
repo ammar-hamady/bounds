@@ -1,13 +1,8 @@
 package com.example.bounds.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -43,17 +37,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.bounds.R
-import com.example.bounds.model.App
 import com.example.bounds.model.Zone
-import com.example.bounds.ui.components.AppChip
 import com.example.bounds.ui.components.MapLocationPicker
+import com.example.bounds.ui.components.defaultAppList
 import com.example.bounds.ui.theme.Amber
-import com.example.bounds.ui.theme.AmberDim
 import com.example.bounds.ui.theme.BgElevated
 import com.example.bounds.ui.theme.BgSurface
 import com.example.bounds.ui.theme.BorderDim
@@ -62,13 +52,14 @@ import com.example.bounds.ui.theme.TextSubtle
 import java.util.UUID
 import kotlin.math.roundToInt
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddZoneScreen(
     onSave: (Zone) -> Unit,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
-    initialZone: Zone? = null
+    initialZone: Zone? = null,
+    defaultBlockedApps: List<String> = emptyList()
 ) {
     var zoneName by remember { mutableStateOf(initialZone?.name ?: "") }
     var latitude by remember { mutableStateOf(initialZone?.latitude ?: 40.7128) }
@@ -77,21 +68,7 @@ fun AddZoneScreen(
     var isTimeSensitive by remember { mutableStateOf(initialZone?.isTimeSensitive ?: false) }
     var startTime by remember { mutableStateOf(initialZone?.startTime ?: "22:00") }
     var endTime by remember { mutableStateOf(initialZone?.endTime ?: "07:00") }
-    var selectedApps by remember {
-        val blocked = initialZone?.blockedApps ?: emptyList()
-        mutableStateOf(
-            listOf(
-                App("1", "Instagram", "ic_home", blocked.contains("Instagram")),
-                App("2", "TikTok",    "ic_home", blocked.contains("TikTok")),
-                App("3", "Twitter",   "ic_home", blocked.contains("Twitter")),
-                App("4", "Discord",   "ic_home", blocked.contains("Discord")),
-                App("5", "YouTube",   "ic_home", blocked.contains("YouTube")),
-                App("6", "Facebook",  "ic_home", blocked.contains("Facebook")),
-                App("7", "Reddit",    "ic_home", blocked.contains("Reddit")),
-                App("8", "Telegram",  "ic_home", blocked.contains("Telegram")),
-            )
-        )
-    }
+    val selectedApps = defaultAppList(initialZone?.blockedApps ?: defaultBlockedApps)
 
     Column(
         modifier = modifier
@@ -323,45 +300,6 @@ fun AddZoneScreen(
                                 singleLine = true
                             )
                         }
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(16.dp))
-
-            // App selection
-            Column(
-                modifier = Modifier
-                    .padding(horizontal = 16.dp)
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(BgSurface)
-                    .padding(16.dp)
-            ) {
-                Text(
-                    text = "BLOCK THESE APPS",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    letterSpacing = 1.4.sp,
-                    color = TextSubtle,
-                    modifier = Modifier.padding(bottom = 12.dp)
-                )
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    selectedApps.forEach { app ->
-                        AppChip(
-                            name = app.name,
-                            icon = painterResource(R.drawable.ic_home),
-                            isSelected = app.isSelected,
-                            onSelect = { sel ->
-                                selectedApps = selectedApps.map {
-                                    if (it.id == app.id) it.copy(isSelected = sel) else it
-                                }
-                            }
-                        )
                     }
                 }
             }

@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.example.bounds.model.BlockIntensity
 import com.example.bounds.model.ThemePreference
@@ -20,6 +21,7 @@ class SettingsRepository(private val context: Context) {
     private val hapticsKey     = booleanPreferencesKey("haptic_feedback_enabled")
     private val entryNotificationsKey = booleanPreferencesKey("entry_notifications_enabled")
     private val blockIntensityKey = stringPreferencesKey("block_intensity")
+    private val defaultBlockedAppsKey = stringSetPreferencesKey("default_blocked_apps")
 
     val themePreferenceFlow: Flow<ThemePreference> = context.settingsDataStore.data.map { prefs ->
         val name = prefs[themeKey] ?: ThemePreference.DARK.name
@@ -41,6 +43,10 @@ class SettingsRepository(private val context: Context) {
     val blockIntensityFlow: Flow<BlockIntensity> = context.settingsDataStore.data.map { prefs ->
         val name = prefs[blockIntensityKey] ?: BlockIntensity.STRICT.name
         runCatching { BlockIntensity.valueOf(name) }.getOrDefault(BlockIntensity.STRICT)
+    }
+
+    val defaultBlockedAppsFlow: Flow<List<String>> = context.settingsDataStore.data.map { prefs ->
+        prefs[defaultBlockedAppsKey]?.toList() ?: emptyList()
     }
 
     suspend fun saveThemePreference(pref: ThemePreference) {
@@ -65,5 +71,9 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun saveBlockIntensity(intensity: BlockIntensity) {
         context.settingsDataStore.edit { it[blockIntensityKey] = intensity.name }
+    }
+
+    suspend fun saveDefaultBlockedApps(apps: List<String>) {
+        context.settingsDataStore.edit { it[defaultBlockedAppsKey] = apps.toSet() }
     }
 }
