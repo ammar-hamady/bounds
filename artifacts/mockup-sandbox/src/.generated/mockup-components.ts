@@ -5,5 +5,7 @@ export const modules: ModuleMap = {
   "./components/mockups/bounds-app/Home.tsx": () => import("../components/mockups/bounds-app/Home.tsx"),
   "./components/mockups/bounds-app/NewZone.tsx": () => import("../components/mockups/bounds-app/NewZone.tsx"),
   "./components/mockups/bounds-app/Settings.tsx": () => import("../components/mockups/bounds-app/Settings.tsx"),
-  "./components/mockups/bounds-app/Zones.tsx": () => import("../components/mockups/bounds-app/Zones.tsx")
+  "./components/mockups/bounds-app/Zones.tsx": () => import("../components/mockups/bounds-app/Zones.tsx"),
+  "./components/mockups/bounds-navigation/Current.tsx": () => import("../components/mockups/bounds-navigation/Current.tsx"),
+  "./components/mockups/bounds-navigation/FloatingDock.tsx": () => import("../components/mockups/bounds-navigation/FloatingDock.tsx")
 };
