@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.net.VpnService
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -84,6 +85,7 @@ import com.example.bounds.ui.screens.SettingsScreen
 import com.example.bounds.ui.theme.BoundsTheme
 import com.example.bounds.util.BoundsGeofenceManager
 import com.example.bounds.util.PermissionUtils
+import com.example.bounds.util.WebsiteBlockingManager
 import java.util.UUID
 
 class MainActivity : ComponentActivity() {
@@ -115,6 +117,7 @@ fun BoundsApp() {
     val entryNotificationsEnabled by boundsViewModel.entryNotificationsEnabled.collectAsState()
     val blockIntensity by boundsViewModel.blockIntensity.collectAsState()
     val defaultBlockedApps by boundsViewModel.defaultBlockedApps.collectAsState()
+    val websiteEnforcement by app.websiteEnforcement.collectAsState()
     // CurrentScreen is disposed when the user changes tabs. Keep manual lock
     // state above the tab content so returning to Current does not reset it.
     var manualIsLocked by rememberSaveable { mutableStateOf(false) }
@@ -153,6 +156,7 @@ fun BoundsApp() {
                             context,
                             Manifest.permission.POST_NOTIFICATIONS
                         ) == PackageManager.PERMISSION_GRANTED
+                WebsiteBlockingManager.refreshReadiness(context)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -187,6 +191,12 @@ fun BoundsApp() {
     ) { granted ->
         hasNotificationPermission = granted
         boundsViewModel.saveEntryNotificationsEnabled(granted)
+    }
+
+    val vpnConsentLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        WebsiteBlockingManager.refreshReadiness(context)
     }
 
     // ── Sync zone list to Application singleton + platform geofences ──────────
@@ -285,6 +295,15 @@ fun BoundsApp() {
                                 Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
                                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                             )
+                        },
+                        websiteEnforcement       = websiteEnforcement,
+                        onRequestWebsiteVpnConsent = {
+                            val prepareIntent = VpnService.prepare(context)
+                            if (prepareIntent == null) {
+                                WebsiteBlockingManager.retryActivePolicy(context)
+                            } else {
+                                vpnConsentLauncher.launch(prepareIntent)
+                            }
                         }
                     )
                 }
@@ -426,6 +445,10 @@ fun BoundsApp() {
                                                 putStringArrayListExtra(
                                                     GeofenceEnforcementService.EXTRA_BLOCKED_APPS,
                                                     ArrayList(zone.blockedApps)
+                                                )
+                                                putStringArrayListExtra(
+                                                    GeofenceEnforcementService.EXTRA_BLOCKED_DOMAINS,
+                                                    ArrayList(zone.blockedDomains)
                                                 )
                                                 putExtra(GeofenceEnforcementService.EXTRA_IS_TIME_SENSITIVE, zone.isTimeSensitive)
                                                 putExtra(GeofenceEnforcementService.EXTRA_START_TIME, zone.startTime)

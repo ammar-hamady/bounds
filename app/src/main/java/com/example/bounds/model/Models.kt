@@ -8,6 +8,8 @@ data class Zone(
     val startTime: String = "22:00",
     val endTime: String = "07:00",
     val blockedApps: List<String> = emptyList(),
+    /** Canonical registrable domains blocked while this zone is actively enforced. */
+    val blockedDomains: List<String> = emptyList(),
     val latitude: Double = 0.0,
     val longitude: Double = 0.0,
     val radiusMeters: Int = 50

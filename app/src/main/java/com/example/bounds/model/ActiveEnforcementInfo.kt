@@ -9,6 +9,8 @@ data class ActiveEnforcementInfo(
     val zoneName: String,
     /** Friendly app names e.g. "Instagram", "TikTok" */
     val blockedApps: List<String>,
+    /** Canonical domains handled by the local DNS VPN for this zone. */
+    val blockedDomains: List<String> = emptyList(),
     /** True while the grace-period countdown is still running (not yet blocking). */
     val isGracePeriod: Boolean = false
 )

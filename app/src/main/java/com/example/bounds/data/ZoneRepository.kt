@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.example.bounds.model.Zone
+import com.example.bounds.util.DomainBlocklist
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.flow.Flow
@@ -21,13 +22,27 @@ class ZoneRepository(private val context: Context) {
         val json = prefs[zonesKey] ?: "[]"
         runCatching {
             val type = object : TypeToken<List<Zone>>() {}.type
-            gson.fromJson<List<Zone>>(json, type) ?: emptyList()
+            normalizeZones(gson.fromJson<List<Zone>>(json, type) ?: emptyList())
         }.getOrDefault(emptyList())
     }
 
     suspend fun saveZones(zones: List<Zone>) {
         context.zoneDataStore.edit { prefs ->
-            prefs[zonesKey] = gson.toJson(zones)
+            prefs[zonesKey] = gson.toJson(normalizeZones(zones))
+        }
+    }
+
+    companion object {
+        /**
+         * Gson can instantiate a data class without running its constructor,
+         * so fields absent from old JSON may arrive as null despite Kotlin
+         * defaults. Normalize both legacy lists and the new domain list here.
+         */
+        fun normalizeZones(zones: List<Zone>): List<Zone> = zones.map { zone ->
+            zone.copy(
+                blockedApps = zone.blockedApps ?: emptyList(),
+                blockedDomains = DomainBlocklist.canonicalizeAll(zone.blockedDomains ?: emptyList())
+            )
         }
     }
 }

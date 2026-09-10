@@ -1,3 +1,4 @@
 - [Foreground app detection](foreground-app-detection.md) — use recent foreground events, not the most recently used package statistic, to avoid stale self-blocking.
 - [Reliable Android blocking overlays](android-blocking-overlays.md) — enforce with a service-owned application overlay, not a background Activity launch.
 - [Service settings readiness](service-settings-readiness.md) — services must await the first persisted settings snapshot instead of consuming startup defaults.
+- [Android build environment](android-build-environment.md) — Gradle validation requires an Android SDK path; this workspace does not provide one by default.

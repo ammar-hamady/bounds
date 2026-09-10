@@ -41,6 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.bounds.model.Zone
+import com.example.bounds.ui.components.AppList
 import com.example.bounds.ui.components.MapLocationPicker
 import com.example.bounds.ui.components.defaultAppList
 import com.example.bounds.ui.theme.Amber
@@ -49,6 +50,7 @@ import com.example.bounds.ui.theme.BgSurface
 import com.example.bounds.ui.theme.BorderDim
 import com.example.bounds.ui.theme.TextMuted
 import com.example.bounds.ui.theme.TextSubtle
+import com.example.bounds.util.DomainBlocklist
 import java.util.UUID
 import kotlin.math.roundToInt
 
@@ -68,7 +70,28 @@ fun AddZoneScreen(
     var isTimeSensitive by remember { mutableStateOf(initialZone?.isTimeSensitive ?: false) }
     var startTime by remember { mutableStateOf(initialZone?.startTime ?: "22:00") }
     var endTime by remember { mutableStateOf(initialZone?.endTime ?: "07:00") }
-    val selectedApps = defaultAppList(initialZone?.blockedApps ?: defaultBlockedApps)
+    var selectedApps by remember(initialZone?.id, defaultBlockedApps) {
+        mutableStateOf(defaultAppList(initialZone?.blockedApps ?: defaultBlockedApps))
+    }
+    var domains by remember(initialZone?.id) {
+        mutableStateOf(DomainBlocklist.canonicalizeAll(initialZone?.blockedDomains.orEmpty()))
+    }
+    var domainInput by remember { mutableStateOf("") }
+    var domainError by remember { mutableStateOf<String?>(null) }
+
+    fun addDomain() {
+        val validation = DomainBlocklist.validate(domainInput)
+        val domain = validation.domain
+        when {
+            domain == null -> domainError = validation.error
+            domain in domains -> domainError = "$domain is already on this list."
+            else -> {
+                domains = (domains + domain).distinct()
+                domainInput = ""
+                domainError = null
+            }
+        }
+    }
 
     Column(
         modifier = modifier
@@ -159,6 +182,19 @@ fun AddZoneScreen(
 
             Spacer(Modifier.height(24.dp))
 
+            // Blocked apps
+            AppList(
+                apps = selectedApps,
+                onAppSelectionChange = { appId, isSelected ->
+                    selectedApps = selectedApps.map {
+                        if (it.id == appId) it.copy(isSelected = isSelected) else it
+                    }
+                },
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+
+            Spacer(Modifier.height(24.dp))
+
             // Radius slider
             Column(modifier = Modifier.padding(horizontal = 16.dp)) {
                 Row(
@@ -198,6 +234,94 @@ fun AddZoneScreen(
                 ) {
                     Text(text = "50m",  fontSize = 11.sp, color = TextSubtle)
                     Text(text = "500m", fontSize = 11.sp, color = TextSubtle)
+                }
+            }
+
+            Spacer(Modifier.height(24.dp))
+
+            // Website blocklist
+            Column(
+                modifier = Modifier
+                    .padding(horizontal = 16.dp)
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(BgSurface)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text = "WEBSITE BLOCKLIST",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 1.4.sp,
+                    color = TextSubtle
+                )
+                Text(
+                    text = "Domains and all of their subdomains are blocked after the grace period. VPN consent is required in Settings.",
+                    fontSize = 12.sp,
+                    color = TextMuted
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextField(
+                        value = domainInput,
+                        onValueChange = {
+                            domainInput = it
+                            domainError = null
+                        },
+                        placeholder = { Text("example.com", color = TextMuted) },
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp)),
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = BgElevated,
+                            unfocusedContainerColor = BgElevated,
+                            focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent,
+                            cursorColor = Amber
+                        ),
+                        singleLine = true
+                    )
+                    Button(
+                        onClick = ::addDomain,
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Amber,
+                            contentColor = Color.Black
+                        )
+                    ) { Text("Add") }
+                }
+                domainError?.let {
+                    Text(text = it, fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
+                }
+                if (domains.isEmpty()) {
+                    Text("No domains configured.", fontSize = 12.sp, color = TextMuted)
+                } else {
+                    domains.forEach { domain ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = domain,
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(onClick = { domains = domains - domain }) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Remove $domain",
+                                    tint = TextMuted
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
@@ -319,6 +443,7 @@ fun AddZoneScreen(
                         startTime    = startTime,
                         endTime      = endTime,
                         blockedApps  = selectedApps.filter { it.isSelected }.map { it.name },
+                        blockedDomains = domains,
                         latitude     = latitude,
                         longitude    = longitude,
                         radiusMeters = radius.roundToInt()

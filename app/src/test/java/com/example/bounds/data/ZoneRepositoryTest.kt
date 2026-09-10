@@ -29,9 +29,12 @@ class ZoneRepositoryTest {
     // Helper: mirrors the read path in ZoneRepository.zonesFlow
     // ---------------------------------------------------------------------------
     private fun deserialize(json: String): List<Zone> =
-        runCatching {
+        ZoneRepository.normalizeZones(runCatching {
             gson.fromJson<List<Zone>>(json, zonesType) ?: emptyList()
-        }.getOrDefault(emptyList())
+        }.getOrDefault(emptyList()))
+
+    private fun deserializeThroughRepository(json: String): List<Zone> =
+        deserialize(json)
 
     // ---------------------------------------------------------------------------
     // Helper: mirrors the write path in ZoneRepository.saveZones
@@ -109,6 +112,37 @@ class ZoneRepositoryTest {
         assertEquals(0.0, z.latitude, 0.0)
         assertEquals(0.0, z.longitude, 0.0)
         assertEquals(50, z.radiusMeters)
+    }
+
+    @Test
+    fun `zones saved before website blocking load with an empty domain list`() {
+        val legacyJson = """[{
+            "id":"legacy",
+            "name":"Old zone",
+            "isEnabled":true,
+            "isTimeSensitive":false,
+            "startTime":"22:00",
+            "endTime":"07:00",
+            "blockedApps":["Instagram"],
+            "latitude":40.0,
+            "longitude":-73.0,
+            "radiusMeters":100
+        }]"""
+
+        val restored = deserializeThroughRepository(legacyJson)
+
+        assertEquals(1, restored.size)
+        assertTrue(restored[0].blockedDomains.isEmpty())
+        assertEquals(listOf("Instagram"), restored[0].blockedApps)
+    }
+
+    @Test
+    fun `domain list is normalized and deduplicated when zones are loaded`() {
+        val json = """[{"id":"z","name":"Web","blockedDomains":[" HTTPS://Example.com/path ","example.com.","bad entry"]}]"""
+
+        val restored = deserializeThroughRepository(json)
+
+        assertEquals(listOf("example.com"), restored[0].blockedDomains)
     }
 
     @Test

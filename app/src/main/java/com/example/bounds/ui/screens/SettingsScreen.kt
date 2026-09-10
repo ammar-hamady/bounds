@@ -65,6 +65,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.bounds.model.BlockIntensity
 import com.example.bounds.model.ThemePreference
+import com.example.bounds.model.WebsiteEnforcementState
+import com.example.bounds.model.WebsiteEnforcementStatus
 import com.example.bounds.ui.components.AppList
 import com.example.bounds.ui.components.defaultAppList
 import com.example.bounds.ui.theme.Amber
@@ -95,9 +97,12 @@ fun SettingsScreen(
     onBack: () -> Unit,
     hasUsageStatsPermission: Boolean = true,
     onRequestUsageAccess: () -> Unit = {},
+    websiteEnforcement: WebsiteEnforcementState = WebsiteEnforcementState(),
+    onRequestWebsiteVpnConsent: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showWebsiteInfo by remember { mutableStateOf(false) }
     var selectedApps by remember(defaultBlockedApps) {
         mutableStateOf(defaultAppList(defaultBlockedApps))
     }
@@ -292,7 +297,20 @@ fun SettingsScreen(
                 SettingsRow(
                     icon = Icons.Filled.Language,
                     label = "Website blocklist",
-                    value = "Requires VPN support"
+                    value = when (websiteEnforcement.status) {
+                        WebsiteEnforcementStatus.ACTIVE -> "Active"
+                        WebsiteEnforcementStatus.READY -> "Ready"
+                        WebsiteEnforcementStatus.DISPLACED -> "Another VPN"
+                        WebsiteEnforcementStatus.UNAVAILABLE -> "Unavailable"
+                    },
+                    showArrow = true,
+                    onClick = { showWebsiteInfo = true }
+                )
+                Text(
+                    text = "Blocks configured domains and subdomains during an active zone. Tap to review VPN status and limits.",
+                    fontSize = 11.sp,
+                    color = TextMuted,
+                    modifier = Modifier.padding(start = 60.dp, end = 16.dp, bottom = 12.dp)
                 )
             }
 
@@ -347,6 +365,60 @@ fun SettingsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    if (showWebsiteInfo) {
+        AlertDialog(
+            onDismissRequest = { showWebsiteInfo = false },
+            title = { Text("Website blocking") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(websiteEnforcement.message)
+                    Text(
+                        "Bounds filters domain lookups locally and matches subdomains. It does not inspect URLs or page content.",
+                        fontSize = 13.sp,
+                        color = TextMuted
+                    )
+                    Text(
+                        "Cached lookups, browser DoH/DoT, direct IP addresses, and another active VPN can bypass or prevent domain blocking. Bounds does not collect DNS history.",
+                        fontSize = 12.sp,
+                        color = TextMuted
+                    )
+                    if (websiteEnforcement.domains.isNotEmpty()) {
+                        Text(
+                            "Configured now: ${websiteEnforcement.domains.joinToString()}",
+                            fontSize = 12.sp,
+                            color = TextMuted
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                if (websiteEnforcement.status != WebsiteEnforcementStatus.ACTIVE) {
+                    Button(
+                        onClick = {
+                            showWebsiteInfo = false
+                            onRequestWebsiteVpnConsent()
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Amber,
+                            contentColor = Color.Black
+                        )
+                    ) {
+                        Text(
+                            if (websiteEnforcement.status == WebsiteEnforcementStatus.DISPLACED) {
+                                "Try again"
+                            } else {
+                                "Approve VPN"
+                            }
+                        )
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showWebsiteInfo = false }) { Text("Close") }
             }
         )
     }

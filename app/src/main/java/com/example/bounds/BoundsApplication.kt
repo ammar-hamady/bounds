@@ -8,6 +8,7 @@ import com.example.bounds.model.ActiveEnforcementInfo
 import com.example.bounds.model.AnalyticsEvent
 import com.example.bounds.model.BlockIntensity
 import com.example.bounds.model.Zone
+import com.example.bounds.model.WebsiteEnforcementState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -38,6 +39,9 @@ class BoundsApplication : Application() {
     // ── Active zone enforcement ───────────────────────────────────────────────
     private val _activeEnforcement = MutableStateFlow<ActiveEnforcementInfo?>(null)
     val activeEnforcement: StateFlow<ActiveEnforcementInfo?> = _activeEnforcement.asStateFlow()
+
+    private val _websiteEnforcement = MutableStateFlow(WebsiteEnforcementState())
+    val websiteEnforcement: StateFlow<WebsiteEnforcementState> = _websiteEnforcement.asStateFlow()
 
     // ── Analytics events produced by zone sessions ────────────────────────────
     private val _pendingAnalytics = MutableStateFlow<AnalyticsEvent?>(null)
@@ -92,6 +96,9 @@ class BoundsApplication : Application() {
     }
 
     fun setEnforcement(info: ActiveEnforcementInfo?) { _activeEnforcement.value = info }
+    fun setWebsiteEnforcement(state: WebsiteEnforcementState) {
+        _websiteEnforcement.value = state
+    }
     fun postAnalyticsEvent(event: AnalyticsEvent) { _pendingAnalytics.value = event }
     fun consumeAnalyticsEvent() { _pendingAnalytics.value = null }
 

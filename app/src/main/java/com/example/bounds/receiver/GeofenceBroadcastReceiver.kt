@@ -45,6 +45,10 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
                             GeofenceEnforcementService.EXTRA_BLOCKED_APPS,
                             ArrayList(zone.blockedApps)
                         )
+                        putStringArrayListExtra(
+                            GeofenceEnforcementService.EXTRA_BLOCKED_DOMAINS,
+                            ArrayList(zone.blockedDomains)
+                        )
                         putExtra(GeofenceEnforcementService.EXTRA_IS_TIME_SENSITIVE, zone.isTimeSensitive)
                         putExtra(GeofenceEnforcementService.EXTRA_START_TIME, zone.startTime)
                         putExtra(GeofenceEnforcementService.EXTRA_END_TIME, zone.endTime)

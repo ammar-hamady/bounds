@@ -23,6 +23,8 @@ import com.example.bounds.R
 import com.example.bounds.model.ActiveEnforcementInfo
 import com.example.bounds.model.AnalyticsEvent
 import com.example.bounds.util.AppBlockingManager
+import com.example.bounds.util.WebsiteBlockingManager
+import com.example.bounds.util.WebsiteEnforcementCoordinator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -50,6 +52,7 @@ class GeofenceEnforcementService : Service() {
         const val EXTRA_ZONE_ID          = "zone_id"
         const val EXTRA_ZONE_NAME        = "zone_name"
         const val EXTRA_BLOCKED_APPS     = "blocked_apps"
+        const val EXTRA_BLOCKED_DOMAINS  = "blocked_domains"
         const val EXTRA_IS_TIME_SENSITIVE = "is_time_sensitive"
         const val EXTRA_START_TIME       = "start_time"
         const val EXTRA_END_TIME         = "end_time"
@@ -63,10 +66,12 @@ class GeofenceEnforcementService : Service() {
     private val handler = Handler(Looper.getMainLooper())
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var graceRunnable: Runnable? = null
+    private val websiteCoordinator = WebsiteEnforcementCoordinator()
 
     private var currentZoneId: String?     = null
     private var currentZoneName: String?   = null
     private var blockedApps: List<String>  = emptyList()
+    private var blockedDomains: List<String> = emptyList()
     private var isActivelyBlocking         = false
     private var blockingStartedAtMs: Long  = 0L
 
@@ -98,6 +103,8 @@ class GeofenceEnforcementService : Service() {
     }
 
     override fun onDestroy() {
+        currentZoneId?.let { WebsiteBlockingManager.deactivate(applicationContext, it) }
+        AppBlockingManager.stopAllBlocking(applicationContext)
         super.onDestroy()
         graceRunnable?.let { handler.removeCallbacks(it) }
         serviceScope.cancel()
@@ -111,6 +118,7 @@ class GeofenceEnforcementService : Service() {
         val zoneId   = intent.getStringExtra(EXTRA_ZONE_ID)   ?: return
         val zoneName = intent.getStringExtra(EXTRA_ZONE_NAME) ?: "Zone"
         val apps     = intent.getStringArrayListExtra(EXTRA_BLOCKED_APPS) ?: ArrayList()
+        val domains  = intent.getStringArrayListExtra(EXTRA_BLOCKED_DOMAINS) ?: ArrayList()
         val timeSensitive = intent.getBooleanExtra(EXTRA_IS_TIME_SENSITIVE, false)
         val startTime = intent.getStringExtra(EXTRA_START_TIME) ?: "00:00"
         val endTime   = intent.getStringExtra(EXTRA_END_TIME)   ?: "23:59"
@@ -131,12 +139,21 @@ class GeofenceEnforcementService : Service() {
             return
         }
 
+        websiteCoordinator.enter(zoneId, domains)
+
         // Cancel any previous grace countdown
         graceRunnable?.let { handler.removeCallbacks(it) }
+        if (currentZoneId != null) {
+            // A new winning zone replaces both policies atomically. Stopping
+            // the app service does not affect the VPN's consent state.
+            AppBlockingManager.stopAllBlocking(applicationContext)
+            WebsiteBlockingManager.deactivate(applicationContext, currentZoneId)
+        }
 
         currentZoneId   = zoneId
         currentZoneName = zoneName
         blockedApps     = apps
+        blockedDomains  = domains
 
         val app = applicationContext as BoundsApplication
         val graceMs = app.graceTimerSeconds * 1000L
@@ -153,13 +170,14 @@ class GeofenceEnforcementService : Service() {
                 zoneId      = zoneId,
                 zoneName    = zoneName,
                 blockedApps = apps,
+                blockedDomains = domains,
                 isGracePeriod = graceMs > 0
             )
         )
 
         Log.i(TAG, "Zone ENTER: '$zoneName', grace=${app.graceTimerSeconds}s, apps=$apps")
 
-        graceRunnable = Runnable { activateBlocking(zoneId, zoneName, apps) }
+        graceRunnable = Runnable { activateBlocking(zoneId, zoneName, apps, domains) }
         if (graceMs > 0) {
             handler.postDelayed(graceRunnable!!, graceMs)
         } else {
@@ -167,8 +185,14 @@ class GeofenceEnforcementService : Service() {
         }
     }
 
-    private fun activateBlocking(zoneId: String, zoneName: String, apps: List<String>) {
+    private fun activateBlocking(
+        zoneId: String,
+        zoneName: String,
+        apps: List<String>,
+        domains: List<String>
+    ) {
         if (currentZoneId != zoneId) return   // zone changed during grace period
+        if (websiteCoordinator.activate(zoneId) == null) return
 
         Log.i(TAG, "Activating blocking for '$zoneName': $apps")
         apps.forEach { appName ->
@@ -179,6 +203,7 @@ class GeofenceEnforcementService : Service() {
                 durationMins = 60   // long sentinel; stopped explicitly on EXIT
             )
         }
+        WebsiteBlockingManager.activate(applicationContext, zoneId, domains)
 
         // Haptic: double pulse to signal enforcement start
         if ((applicationContext as BoundsApplication).hapticFeedbackEnabled) {
@@ -193,6 +218,7 @@ class GeofenceEnforcementService : Service() {
                 zoneId      = zoneId,
                 zoneName    = zoneName,
                 blockedApps = apps,
+                blockedDomains = domains,
                 isGracePeriod = false
             )
         )
@@ -209,6 +235,7 @@ class GeofenceEnforcementService : Service() {
 
     private fun handleExit(zoneId: String?) {
         if (zoneId != null && zoneId != currentZoneId) return   // exit for a different zone
+        websiteCoordinator.exit(zoneId)
 
         Log.i(TAG, "Zone EXIT: '$currentZoneName'")
 
@@ -216,6 +243,7 @@ class GeofenceEnforcementService : Service() {
         graceRunnable = null
 
         AppBlockingManager.stopAllBlocking(applicationContext)
+        WebsiteBlockingManager.deactivate(applicationContext, currentZoneId)
 
         val app = applicationContext as BoundsApplication
 
@@ -246,6 +274,7 @@ class GeofenceEnforcementService : Service() {
         currentZoneId        = null
         currentZoneName      = null
         blockedApps          = emptyList()
+        blockedDomains       = emptyList()
         blockingStartedAtMs  = 0L
 
         @Suppress("DEPRECATION")
