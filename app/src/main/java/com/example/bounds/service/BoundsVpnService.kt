@@ -4,12 +4,25 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Intent
+import android.graphics.Color
+import android.graphics.PixelFormat
+import android.graphics.drawable.GradientDrawable
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.VpnService
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.ParcelFileDescriptor
+import android.os.SystemClock
+import android.provider.Settings
+import android.view.Gravity
+import android.view.View
+import android.view.WindowManager
+import android.widget.FrameLayout
+import android.widget.LinearLayout
+import android.widget.TextView
 import androidx.core.app.NotificationCompat
 import com.example.bounds.BoundsApplication
 import com.example.bounds.R
@@ -28,6 +41,7 @@ import java.io.FileOutputStream
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Local DNS-only VPN. It routes only the synthetic DNS address through the
@@ -48,18 +62,29 @@ class BoundsVpnService : VpnService() {
         private const val TUN_CLIENT_ADDRESS = "10.0.0.2"
         private const val UPSTREAM_DNS = "1.1.1.1"
         private const val DNS_PORT = 53
+        private const val BLOCK_FEEDBACK_DURATION_MS = 3_000L
+        private const val BLOCK_FEEDBACK_COOLDOWN_MS = 15_000L
+        private val BLOCK_FEEDBACK_CALLBACK_TOKEN = Any()
     }
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val feedbackGeneration = AtomicLong(0)
+    private lateinit var windowManager: WindowManager
     private var tunInterface: ParcelFileDescriptor? = null
     private var worker: Job? = null
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     private var activeZoneId: String? = null
     private var activeDomains: List<String> = emptyList()
     private var stoppingIntentionally = false
+    private var blockFeedbackView: View? = null
+    private var hideBlockFeedbackRunnable: Runnable? = null
+    private var restoreNotificationRunnable: Runnable? = null
+    private val lastBlockFeedbackAt = mutableMapOf<String, Long>()
 
     override fun onCreate() {
         super.onCreate()
+        windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         createNotificationChannel()
     }
 
@@ -108,6 +133,7 @@ class BoundsVpnService : VpnService() {
 
     override fun onDestroy() {
         closeTunnel()
+        hideBlockFeedback()
         serviceScope.cancel()
         if (!stoppingIntentionally &&
             (applicationContext as BoundsApplication).websiteEnforcement.value.status ==
@@ -158,6 +184,7 @@ class BoundsVpnService : VpnService() {
             )
         )
         registerNetworkCallback()
+        val workerGeneration = feedbackGeneration.get()
         worker = serviceScope.launch {
             val input = FileInputStream(fd)
             val output = FileOutputStream(fd)
@@ -165,7 +192,14 @@ class BoundsVpnService : VpnService() {
                     val packet = ByteArray(32767)
                     while (isActive) {
                         val length = input.read(packet)
-                        if (length > 0) handlePacket(packet.copyOf(length), output, domains)
+                        if (length > 0) {
+                            handlePacket(
+                                packet = packet.copyOf(length),
+                                output = output,
+                                blockedDomains = domains,
+                                workerGeneration = workerGeneration
+                            )
+                        }
                     }
             } finally {
                 runCatching { input.close() }
@@ -177,16 +211,151 @@ class BoundsVpnService : VpnService() {
     private fun handlePacket(
         packet: ByteArray,
         output: FileOutputStream,
-        blockedDomains: List<String>
+        blockedDomains: List<String>,
+        workerGeneration: Long
     ) {
         val query = DnsPacket.parse(packet) ?: return
-        val response = if (DomainBlocklist.matchesAny(query.name, blockedDomains)) {
+        val matchedDomain = blockedDomains.firstOrNull {
+            DomainBlocklist.matchesDomain(query.name, it)
+        }
+        val response = if (matchedDomain != null) {
+            showBlockFeedback(matchedDomain, workerGeneration)
             DnsPacket.nxdomain(query)
         } else {
             forward(query)
         } ?: return
         runCatching { output.write(DnsPacket.ipv4UdpResponse(query, response)) }
     }
+
+    private fun showBlockFeedback(blockedDomain: String, workerGeneration: Long) {
+        val showRunnable = Runnable {
+            if (
+                feedbackGeneration.get() != workerGeneration ||
+                tunInterface == null
+            ) return@Runnable
+            showBlockFeedbackOnMain(blockedDomain)
+        }
+        mainHandler.postAtTime(
+            showRunnable,
+            BLOCK_FEEDBACK_CALLBACK_TOKEN,
+            SystemClock.uptimeMillis()
+        )
+    }
+
+    private fun showBlockFeedbackOnMain(blockedDomain: String) {
+        val now = System.currentTimeMillis()
+        val lastShown = lastBlockFeedbackAt[blockedDomain] ?: 0L
+        if (now - lastShown < BLOCK_FEEDBACK_COOLDOWN_MS) return
+        lastBlockFeedbackAt[blockedDomain] = now
+
+        getSystemService(NotificationManager::class.java).notify(
+            NOTIFICATION_ID,
+            notification(
+                title = "Bounds blocked $blockedDomain",
+                text = "Website blocked by your active zone"
+            )
+        )
+        restoreNotificationRunnable?.let(mainHandler::removeCallbacks)
+        val restoreRunnable = Runnable {
+            restoreNotificationRunnable = null
+            if (tunInterface != null) {
+                getSystemService(NotificationManager::class.java).notify(
+                    NOTIFICATION_ID,
+                    notification()
+                )
+            }
+        }
+        restoreNotificationRunnable = restoreRunnable
+        mainHandler.postAtTime(
+            restoreRunnable,
+            BLOCK_FEEDBACK_CALLBACK_TOKEN,
+            SystemClock.uptimeMillis() + BLOCK_FEEDBACK_DURATION_MS
+        )
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            return
+        }
+        hideBlockFeedback()
+
+        val banner = createBlockFeedbackBanner(blockedDomain)
+        val windowType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+        } else {
+            @Suppress("DEPRECATION")
+            WindowManager.LayoutParams.TYPE_PHONE
+        }
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            windowType,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP
+        }
+
+        runCatching {
+            windowManager.addView(banner, params)
+            blockFeedbackView = banner
+            val hideRunnable = Runnable { hideBlockFeedback() }
+            hideBlockFeedbackRunnable = hideRunnable
+            mainHandler.postAtTime(
+                hideRunnable,
+                BLOCK_FEEDBACK_CALLBACK_TOKEN,
+                SystemClock.uptimeMillis() + BLOCK_FEEDBACK_DURATION_MS
+            )
+        }
+    }
+
+    private fun createBlockFeedbackBanner(blockedDomain: String): View {
+        val outer = FrameLayout(this).apply {
+            setPadding(dp(16), dp(16), dp(16), 0)
+        }
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(14), dp(18), dp(14))
+            elevation = dp(8).toFloat()
+            background = GradientDrawable().apply {
+                setColor(Color.rgb(13, 22, 38))
+                cornerRadius = dp(16).toFloat()
+                setStroke(dp(1), Color.rgb(255, 193, 7))
+            }
+        }
+        content.addView(TextView(this).apply {
+            text = "Website blocked by Bounds"
+            setTextColor(Color.WHITE)
+            textSize = 15f
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+        })
+        content.addView(TextView(this).apply {
+            text = blockedDomain
+            setTextColor(Color.rgb(255, 193, 7))
+            textSize = 13f
+            setPadding(0, dp(3), 0, 0)
+        })
+        outer.addView(
+            content,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+            )
+        )
+        return outer
+    }
+
+    private fun hideBlockFeedback() {
+        hideBlockFeedbackRunnable?.let(mainHandler::removeCallbacks)
+        hideBlockFeedbackRunnable = null
+        blockFeedbackView?.let { view ->
+            runCatching { windowManager.removeView(view) }
+        }
+        blockFeedbackView = null
+    }
+
+    private fun dp(value: Int): Int =
+        (value * resources.displayMetrics.density).toInt()
 
     private fun forward(query: DnsPacket): ByteArray? {
         return try {
@@ -215,6 +384,9 @@ class BoundsVpnService : VpnService() {
     }
 
     private fun closeTunnel() {
+        feedbackGeneration.incrementAndGet()
+        mainHandler.removeCallbacksAndMessages(BLOCK_FEEDBACK_CALLBACK_TOKEN)
+        hideBlockFeedback()
         worker?.cancel()
         worker = null
         networkCallback?.let { callback ->
@@ -228,6 +400,8 @@ class BoundsVpnService : VpnService() {
         tunInterface = null
         activeZoneId = null
         activeDomains = emptyList()
+        lastBlockFeedbackAt.clear()
+        restoreNotificationRunnable = null
     }
 
     private fun registerNetworkCallback() {
@@ -309,10 +483,13 @@ class BoundsVpnService : VpnService() {
         }
     }
 
-    private fun notification(): Notification =
+    private fun notification(
+        title: String = "Bounds website protection",
+        text: String = "Filtering configured domains"
+    ): Notification =
         NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Bounds website protection")
-            .setContentText("Filtering configured domains")
+            .setContentTitle(title)
+            .setContentText(text)
             .setSmallIcon(R.drawable.ic_favorite)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)

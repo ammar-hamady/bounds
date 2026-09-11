@@ -7,4 +7,4 @@ Use a foreground-service-owned `TYPE_APPLICATION_OVERLAY` for the blocking scree
 
 **Why:** Modern Android restricts background Activity launches; denial can be silent, and Android 15 requires a visible overlay for the relevant exemption. Merely holding overlay permission does not make an Activity an overlay.
 
-**How to apply:** Require “Display over other apps” access before reporting blocking as active, add/remove the overlay through `WindowManager`, and only mark it active after the window was added successfully.
+**How to apply:** Require “Display over other apps” access before reporting blocking as active, add/remove the overlay through `WindowManager`, and only mark it active after the window was added successfully. For DNS website blocks, use brief rate-limited feedback rather than a persistent full-screen window; serialize window state on the main looper and invalidate callbacks when the VPN tunnel is replaced.

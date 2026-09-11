@@ -18,6 +18,11 @@ promise to defeat browser-encrypted DNS or direct IP access.
       Confirm the VPN does not report **Active** until the grace period ends.
 - [ ] After activation, verify the configured domain and a subdomain fail to
       resolve in Chrome while an unrelated domain still loads.
+- [ ] When a configured domain is blocked, confirm a brief **Website blocked by
+      Bounds** banner identifies the matched domain. Without overlay permission,
+      confirm the ongoing VPN notification identifies Bounds and the domain.
+- [ ] Reload the blocked domain repeatedly and confirm feedback is rate-limited
+      rather than stacking or continuously covering the browser.
 - [ ] Leave the zone and confirm the VPN status returns to **Ready** and
       unrelated app blocking/manual locking still works.
 - [ ] Enter two zones in succession. Confirm the newest zone's domains win and
