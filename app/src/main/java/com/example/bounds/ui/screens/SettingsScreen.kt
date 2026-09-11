@@ -99,6 +99,8 @@ fun SettingsScreen(
     onRequestUsageAccess: () -> Unit = {},
     websiteEnforcement: WebsiteEnforcementState = WebsiteEnforcementState(),
     onRequestWebsiteVpnConsent: () -> Unit = {},
+    enforcementSettingsLocked: Boolean = false,
+    onProtectedAction: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -162,7 +164,12 @@ fun SettingsScreen(
                         "Allows a five-minute bypass"
                     },
                     checked = blockIntensity == BlockIntensity.STRICT,
+                    enabled = !enforcementSettingsLocked,
                     onCheckedChange = {
+                        if (enforcementSettingsLocked) {
+                            onProtectedAction()
+                            return@SettingsSwitchRow
+                        }
                         onBlockIntensityChange(
                             if (it) BlockIntensity.STRICT else BlockIntensity.STANDARD
                         )
@@ -209,10 +216,14 @@ fun SettingsScreen(
                     }
                     Slider(
                         value = graceTimerSeconds.toFloat(),
-                        onValueChange = { onGraceTimerChange(it.roundToInt()) },
+                        onValueChange = {
+                            if (enforcementSettingsLocked) onProtectedAction()
+                            else onGraceTimerChange(it.roundToInt())
+                        },
                         valueRange = 0f..60f,
                         steps = 11,
                         modifier = Modifier.fillMaxWidth(),
+                        enabled = !enforcementSettingsLocked,
                         colors = SliderDefaults.colors(
                             thumbColor         = Amber,
                             activeTrackColor   = Amber,
@@ -283,6 +294,10 @@ fun SettingsScreen(
                     apps = selectedApps,
                     title = null,
                     onAppSelectionChange = { appId, isSelected ->
+                        if (enforcementSettingsLocked) {
+                            onProtectedAction()
+                            return@AppList
+                        }
                         val updatedApps = selectedApps.map {
                             if (it.id == appId) it.copy(isSelected = isSelected) else it
                         }
@@ -291,8 +306,17 @@ fun SettingsScreen(
                             updatedApps.filter { it.isSelected }.map { it.name }
                         )
                     },
-                    modifier = Modifier.padding(8.dp)
+                    modifier = Modifier.padding(8.dp),
+                    enabled = !enforcementSettingsLocked
                 )
+                if (enforcementSettingsLocked) {
+                    Text(
+                        text = "Protection settings can be changed after you leave the active zone.",
+                        fontSize = 11.sp,
+                        color = Amber,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+                    )
+                }
                 SettingsDivider()
                 SettingsRow(
                     icon = Icons.Filled.Language,
@@ -516,7 +540,8 @@ private fun SettingsSwitchRow(
     label: String,
     description: String,
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
+    onCheckedChange: (Boolean) -> Unit,
+    enabled: Boolean = true
 ) {
     Row(
         modifier = Modifier
@@ -551,7 +576,7 @@ private fun SettingsSwitchRow(
                 color = TextMuted
             )
         }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
     }
 }
 

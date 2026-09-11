@@ -2,6 +2,7 @@ package com.example.bounds
 
 import android.app.Application
 import com.example.bounds.data.AnalyticsRepository
+import com.example.bounds.data.ActiveEnforcementMutationGuard
 import com.example.bounds.data.SettingsRepository
 import com.example.bounds.data.ZoneRepository
 import com.example.bounds.model.ActiveEnforcementInfo
@@ -27,6 +28,7 @@ class BoundsApplication : Application() {
 
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val settingsReady = CompletableDeferred<Unit>()
+    private val enforcementMutationGuard = ActiveEnforcementMutationGuard()
 
     // ── Repositories (persistent storage) ────────────────────────────────────
     lateinit var zoneRepository: ZoneRepository
@@ -67,9 +69,9 @@ class BoundsApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        zoneRepository = ZoneRepository(this)
+        zoneRepository = ZoneRepository(this, enforcementMutationGuard)
         analyticsRepository = AnalyticsRepository(this)
-        settingsRepository = SettingsRepository(this)
+        settingsRepository = SettingsRepository(this, enforcementMutationGuard)
 
         // Services and boot receivers can run before MainActivity is opened, so
         // keep service-facing settings synchronized directly from DataStore.
@@ -95,7 +97,11 @@ class BoundsApplication : Application() {
         settingsReady.await()
     }
 
-    fun setEnforcement(info: ActiveEnforcementInfo?) { _activeEnforcement.value = info }
+    fun setEnforcement(info: ActiveEnforcementInfo?) {
+        enforcementMutationGuard.updateProtectedZone(info?.zoneId) {
+            _activeEnforcement.value = info
+        }
+    }
     fun setWebsiteEnforcement(state: WebsiteEnforcementState) {
         _websiteEnforcement.value = state
     }

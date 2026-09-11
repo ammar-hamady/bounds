@@ -14,7 +14,11 @@ import kotlinx.coroutines.flow.map
 
 private val Context.settingsDataStore by preferencesDataStore(name = "settings")
 
-class SettingsRepository(private val context: Context) {
+class SettingsRepository(
+    private val context: Context,
+    private val mutationGuard: ActiveEnforcementMutationGuard =
+        ActiveEnforcementMutationGuard()
+) {
 
     private val themeKey       = stringPreferencesKey("theme_preference")
     private val graceTimerKey  = intPreferencesKey("grace_timer_seconds")
@@ -55,10 +59,14 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    suspend fun saveGraceTimerSeconds(seconds: Int) {
+    suspend fun saveGraceTimerSeconds(seconds: Int): Boolean {
+        var persisted = false
         context.settingsDataStore.edit { prefs ->
-            prefs[graceTimerKey] = seconds
+            persisted = mutationGuard.commitEnforcementSettingMutation {
+                prefs[graceTimerKey] = seconds
+            }
         }
+        return persisted
     }
 
     suspend fun saveHapticFeedbackEnabled(enabled: Boolean) {
@@ -69,11 +77,23 @@ class SettingsRepository(private val context: Context) {
         context.settingsDataStore.edit { it[entryNotificationsKey] = enabled }
     }
 
-    suspend fun saveBlockIntensity(intensity: BlockIntensity) {
-        context.settingsDataStore.edit { it[blockIntensityKey] = intensity.name }
+    suspend fun saveBlockIntensity(intensity: BlockIntensity): Boolean {
+        var persisted = false
+        context.settingsDataStore.edit {
+            persisted = mutationGuard.commitEnforcementSettingMutation {
+                it[blockIntensityKey] = intensity.name
+            }
+        }
+        return persisted
     }
 
-    suspend fun saveDefaultBlockedApps(apps: List<String>) {
-        context.settingsDataStore.edit { it[defaultBlockedAppsKey] = apps.toSet() }
+    suspend fun saveDefaultBlockedApps(apps: List<String>): Boolean {
+        var persisted = false
+        context.settingsDataStore.edit {
+            persisted = mutationGuard.commitEnforcementSettingMutation {
+                it[defaultBlockedAppsKey] = apps.toSet()
+            }
+        }
+        return persisted
     }
 }

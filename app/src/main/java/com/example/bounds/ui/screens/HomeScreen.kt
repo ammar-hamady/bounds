@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -58,9 +59,22 @@ fun HomeScreen(
     onToggleZone: (String, Boolean) -> Unit,
     onEditZone: (Zone) -> Unit = {},
     onDeleteZone: (String) -> Unit = {},
+    protectedZoneId: String? = null,
     modifier: Modifier = Modifier
 ) {
     val activeCount = zones.count { it.isEnabled }
+    var showProtectedMessage by remember { mutableStateOf(false) }
+
+    if (showProtectedMessage) {
+        AlertDialog(
+            onDismissRequest = { showProtectedMessage = false },
+            title = { Text("Zone locked") },
+            text = { Text("This zone can be changed after you leave it.") },
+            confirmButton = {
+                TextButton(onClick = { showProtectedMessage = false }) { Text("OK") }
+            }
+        )
+    }
 
     LazyColumn(
         modifier = modifier
@@ -107,9 +121,11 @@ fun HomeScreen(
                     zones.forEachIndexed { index, zone ->
                         ZoneRow(
                             zone = zone,
+                            isProtected = zone.id == protectedZoneId,
                             onToggle = { onToggleZone(zone.id, it) },
                             onEdit   = { onEditZone(zone) },
-                            onDelete = { onDeleteZone(zone.id) }
+                            onDelete = { onDeleteZone(zone.id) },
+                            onProtectedAction = { showProtectedMessage = true }
                         )
                         if (index < zones.lastIndex) {
                             Box(
@@ -159,9 +175,11 @@ fun HomeScreen(
 @Composable
 private fun ZoneRow(
     zone: Zone,
+    isProtected: Boolean,
     onToggle: (Boolean) -> Unit,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onProtectedAction: () -> Unit
 ) {
     var showDeleteDialog by remember { mutableStateOf(false) }
 
@@ -191,7 +209,7 @@ private fun ZoneRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onEdit)
+            .clickable(onClick = if (isProtected) onProtectedAction else onEdit)
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -221,6 +239,20 @@ private fun ZoneRow(
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1
             )
+            if (isProtected) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = null,
+                        tint = Amber,
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Text("Locked while in this zone", fontSize = 11.sp, color = Amber)
+                }
+            }
             val subtitle = buildString {
                 if (zone.isTimeSensitive) append("${zone.startTime} – ${zone.endTime} · ")
                 append("${zone.radiusMeters}m radius")
@@ -235,7 +267,9 @@ private fun ZoneRow(
 
         // Delete button — intercepts click so it does not bubble to the row's onEdit
         IconButton(
-            onClick = { showDeleteDialog = true },
+            onClick = {
+                if (isProtected) onProtectedAction() else showDeleteDialog = true
+            },
             modifier = Modifier
                 .size(36.dp)
                 .clickable(
@@ -247,7 +281,7 @@ private fun ZoneRow(
             Icon(
                 imageVector = Icons.Default.Delete,
                 contentDescription = "Delete zone",
-                tint = TextMuted,
+                tint = if (isProtected) TextMuted.copy(alpha = 0.45f) else TextMuted,
                 modifier = Modifier.size(18.dp)
             )
         }
@@ -263,6 +297,7 @@ private fun ZoneRow(
             Switch(
                 checked = zone.isEnabled,
                 onCheckedChange = onToggle,
+                enabled = !isProtected,
                 colors = SwitchDefaults.colors(
                     checkedThumbColor      = Color.White,
                     checkedTrackColor      = Amber,

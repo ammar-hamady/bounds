@@ -63,7 +63,9 @@ fun AddZoneScreen(
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
     initialZone: Zone? = null,
-    defaultBlockedApps: List<String> = emptyList()
+    defaultBlockedApps: List<String> = emptyList(),
+    isProtected: Boolean = false,
+    onProtectedAction: () -> Unit = {}
 ) {
     var zoneName by remember { mutableStateOf(initialZone?.name ?: "") }
     var latitude by remember { mutableStateOf(initialZone?.latitude ?: 40.7128) }
@@ -436,6 +438,10 @@ fun AddZoneScreen(
         // ── Save button ───────────────────────────────────────────────────────
         Button(
             onClick = {
+                if (isProtected) {
+                    onProtectedAction()
+                    return@Button
+                }
                 onSave(
                     Zone(
                         id           = initialZone?.id ?: UUID.randomUUID().toString(),
@@ -464,7 +470,7 @@ fun AddZoneScreen(
             )
         ) {
             Text(
-                text = if (initialZone != null) "Save Changes" else "Save Zone",
+                text = if (isProtected) "Locked Until You Leave" else if (initialZone != null) "Save Changes" else "Save Zone",
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold
             )

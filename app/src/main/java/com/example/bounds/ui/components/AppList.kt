@@ -40,7 +40,8 @@ fun AppList(
     apps: List<App>,
     onAppSelectionChange: (String, Boolean) -> Unit,
     modifier: Modifier = Modifier,
-    title: String? = "BLOCK THESE APPS"
+    title: String? = "BLOCK THESE APPS",
+    enabled: Boolean = true
 ) {
     Column(
         modifier = modifier
@@ -69,6 +70,7 @@ fun AppList(
                     name = app.name,
                     icon = painterResource(R.drawable.ic_home),
                     isSelected = app.isSelected,
+                    enabled = enabled,
                     onSelect = { isSelected ->
                         onAppSelectionChange(app.id, isSelected)
                     }

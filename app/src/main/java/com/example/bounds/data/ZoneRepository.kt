@@ -13,7 +13,11 @@ import kotlinx.coroutines.flow.map
 
 private val Context.zoneDataStore by preferencesDataStore(name = "zones")
 
-class ZoneRepository(private val context: Context) {
+class ZoneRepository(
+    private val context: Context,
+    private val mutationGuard: ActiveEnforcementMutationGuard =
+        ActiveEnforcementMutationGuard()
+) {
 
     private val gson = Gson()
     private val zonesKey = stringPreferencesKey("zones_json")
@@ -26,11 +30,22 @@ class ZoneRepository(private val context: Context) {
         }.getOrDefault(emptyList())
     }
 
-    suspend fun saveZones(zones: List<Zone>) {
+    suspend fun saveZones(zones: List<Zone>): Boolean {
+        val normalized = normalizeZones(zones)
+        var persisted = false
         context.zoneDataStore.edit { prefs ->
-            prefs[zonesKey] = gson.toJson(normalizeZones(zones))
+            val current = decodeZones(prefs[zonesKey])
+            persisted = mutationGuard.commitZoneMutation(current, normalized) {
+                prefs[zonesKey] = gson.toJson(normalized)
+            }
         }
+        return persisted
     }
+
+    private fun decodeZones(json: String?): List<Zone> = runCatching {
+        val type = object : TypeToken<List<Zone>>() {}.type
+        normalizeZones(gson.fromJson<List<Zone>>(json ?: "[]", type) ?: emptyList())
+    }.getOrDefault(emptyList())
 
     companion object {
         /**

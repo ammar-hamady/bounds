@@ -48,6 +48,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -248,7 +250,20 @@ fun BoundsApp() {
         // Save only the ID. Zone itself is not Parcelable/Serializable and
         // cannot safely be stored in Android's saved-instance-state Bundle.
         var editingZoneId      by rememberSaveable { mutableStateOf<String?>(null) }
+        var showProtectedMessage by remember { mutableStateOf(false) }
         val editingZone = editingZoneId?.let { id -> zones.firstOrNull { it.id == id } }
+        val protectedZoneId = activeEnforcement?.zoneId
+
+        if (showProtectedMessage) {
+            AlertDialog(
+                onDismissRequest = { showProtectedMessage = false },
+                title = { Text("Protection settings locked") },
+                text = { Text("These settings can be changed after you leave the active zone.") },
+                confirmButton = {
+                    TextButton(onClick = { showProtectedMessage = false }) { Text("OK") }
+                }
+            )
+        }
 
         val navLayer = when {
             showSettingsScreen -> NavLayer.SETTINGS
@@ -326,7 +341,9 @@ fun BoundsApp() {
                                 WebsiteBlockingManager.markConsentPending(context)
                                 vpnConsentLauncher.launch(prepareIntent)
                             }
-                        }
+                        },
+                        enforcementSettingsLocked = protectedZoneId != null,
+                        onProtectedAction = { showProtectedMessage = true }
                     )
                 }
 
@@ -338,16 +355,23 @@ fun BoundsApp() {
                             } else {
                                 zones + newZone
                             }
-                            boundsViewModel.saveZones(updatedZones)
-                            showAddZoneScreen = false
-                            editingZoneId = null
+                            boundsViewModel.saveZones(updatedZones) { saved ->
+                                if (saved) {
+                                    showAddZoneScreen = false
+                                    editingZoneId = null
+                                } else {
+                                    showProtectedMessage = true
+                                }
+                            }
                         },
                         onCancel = {
                             showAddZoneScreen = false
                             editingZoneId = null
                         },
                         initialZone = editingZone,
-                        defaultBlockedApps = defaultBlockedApps
+                        defaultBlockedApps = defaultBlockedApps,
+                        isProtected = editingZoneId != null && editingZoneId == protectedZoneId,
+                        onProtectedAction = { showProtectedMessage = true }
                     )
                 }
 
@@ -412,7 +436,8 @@ fun BoundsApp() {
                                         },
                                         onDeleteZone = { id ->
                                             boundsViewModel.saveZones(zones.filter { it.id != id })
-                                        }
+                                        },
+                                        protectedZoneId = protectedZoneId
                                     )
                                 }
 

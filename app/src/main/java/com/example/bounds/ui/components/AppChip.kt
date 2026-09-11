@@ -34,7 +34,8 @@ fun AppChip(
     icon: Painter,
     isSelected: Boolean,
     onSelect: (Boolean) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
 ) {
     Column(
         modifier = modifier
@@ -46,7 +47,7 @@ fun AppChip(
                 color = if (isSelected) Amber else BorderDim,
                 shape = RoundedCornerShape(14.dp)
             )
-            .clickable { onSelect(!isSelected) }
+            .clickable(enabled = enabled) { onSelect(!isSelected) }
             .padding(vertical = 8.dp, horizontal = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
@@ -55,14 +56,14 @@ fun AppChip(
             painter = icon,
             contentDescription = name,
             modifier = Modifier.size(26.dp),
-            tint = if (isSelected) Amber else TextMuted
+            tint = if (!enabled) TextMuted.copy(alpha = 0.45f) else if (isSelected) Amber else TextMuted
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = name,
             fontSize = 9.sp,
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-            color = if (isSelected) Amber else TextMuted,
+            color = if (!enabled) TextMuted.copy(alpha = 0.45f) else if (isSelected) Amber else TextMuted,
             maxLines = 1
         )
     }

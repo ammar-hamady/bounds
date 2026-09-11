@@ -21,7 +21,8 @@ import kotlinx.coroutines.launch
 class BoundsViewModel(
     private val zoneRepository: ZoneRepository,
     private val analyticsRepository: AnalyticsRepository,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val protectedZoneId: () -> String?
 ) : ViewModel() {
 
     val zones: StateFlow<List<Zone>> = zoneRepository.zonesFlow
@@ -49,8 +50,8 @@ class BoundsViewModel(
     val defaultBlockedApps: StateFlow<List<String>> = settingsRepository.defaultBlockedAppsFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    fun saveZones(zones: List<Zone>) {
-        viewModelScope.launch { zoneRepository.saveZones(zones) }
+    fun saveZones(zones: List<Zone>, onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch { onResult(zoneRepository.saveZones(zones)) }
     }
 
     fun addEvent(event: AnalyticsEvent) {
@@ -68,6 +69,7 @@ class BoundsViewModel(
     }
 
     fun saveGraceTimerSeconds(seconds: Int) {
+        if (protectedZoneId() != null) return
         viewModelScope.launch { settingsRepository.saveGraceTimerSeconds(seconds) }
     }
 
@@ -80,10 +82,12 @@ class BoundsViewModel(
     }
 
     fun saveBlockIntensity(intensity: BlockIntensity) {
+        if (protectedZoneId() != null) return
         viewModelScope.launch { settingsRepository.saveBlockIntensity(intensity) }
     }
 
     fun saveDefaultBlockedApps(apps: List<String>) {
+        if (protectedZoneId() != null) return
         viewModelScope.launch { settingsRepository.saveDefaultBlockedApps(apps) }
     }
 
@@ -91,7 +95,11 @@ class BoundsViewModel(
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 val app = checkNotNull(this[APPLICATION_KEY]) as BoundsApplication
-                BoundsViewModel(app.zoneRepository, app.analyticsRepository, app.settingsRepository)
+                BoundsViewModel(
+                    app.zoneRepository,
+                    app.analyticsRepository,
+                    app.settingsRepository
+                ) { app.activeEnforcement.value?.zoneId }
             }
         }
     }
